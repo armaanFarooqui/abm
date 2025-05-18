@@ -1,0 +1,22 @@
+; tick-bite-submodel.nls
+
+;; This submodel evaluates tick bite risk for each turtle.
+;; It is independent of main model state and requires input values.
+
+to evaluate-tick-bite-risk [temp]
+  if temp < 7 [stop]
+
+  ask turtles [
+    set exposure-level ifelse-value activity = 1 [0.1]
+                         [ifelse-value activity = 2 [0.8] [0.5]]
+
+    let hazard [tick-density] of patch-here * [patch-risk] of patch-here
+    let vulnerability 1 - (protection-level * awareness)
+    let bite-risk hazard * exposure-level * vulnerability
+
+    if random-float 1 < bite-risk [
+      set bite-stat true
+      ask patch-here [ set patch-bite-count patch-bite-count + 1 ]	
+    ]
+  ]
+end
