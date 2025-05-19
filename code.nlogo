@@ -7,7 +7,6 @@ breed [adults adult]
 breed [seniors senior]
 breed [tourists tourist]
 
-breed [residents resident]
 
 turtles-own [
   activity risk-factor bite-stat protection-level exposure-level
@@ -421,21 +420,6 @@ bite-count
 17
 1
 11
-
-SLIDER
-12
-106
-175
-139
-initial-number-residents
-initial-number-residents
-0
-100
-90.0
-10
-1
-NIL
-HORIZONTAL
 
 SLIDER
 11
@@ -1246,6 +1230,38 @@ NetLogo 6.4.0
     <metric>bites-residential</metric>
     <steppedValueSet variable="initial-number-residents" first="0" step="100" last="1000"/>
     <steppedValueSet variable="initial-number-tourists" first="0" step="100" last="1000"/>
+  </experiment>
+  <experiment name="baseline_simulation" repetitions="10" runMetricsEveryStep="false">
+    <setup>setup</setup>
+    <go>repeat 366 [ go ]</go>
+    <metric>bite-count</metric>
+    <metric>total-bites-children</metric>
+    <metric>total-bites-adults</metric>
+    <metric>total-bites-seniors</metric>
+    <metric>total-bites-tourists</metric>
+    <subExperiment>
+      <steppedValueSet variable="initial-number-children" first="0" step="100" last="10"/>
+      <steppedValueSet variable="initial-number-adults" first="0" step="100" last="10"/>
+      <steppedValueSet variable="initial-number-seniors" first="0" step="100" last="10"/>
+      <steppedValueSet variable="initial-number-tourists" first="0" step="100" last="10"/>
+      <steppedValueSet variable="stay-duration" first="0" step="30" last="1"/>
+      <steppedValueSet variable="children-risk-factor" first="0" step="2" last="0.2"/>
+      <steppedValueSet variable="adults-risk-factor" first="0" step="2" last="0.2"/>
+      <steppedValueSet variable="seniors-risk-factor" first="0" step="2" last="0.2"/>
+      <steppedValueSet variable="tourists-risk-factor" first="0" step="2" last="0.2"/>
+      <steppedValueSet variable="children-awareness" first="0" step="1" last="0.1"/>
+      <steppedValueSet variable="adults-awareness" first="0" step="1" last="0.1"/>
+      <steppedValueSet variable="seniors-awareness" first="0" step="1" last="0.1"/>
+      <steppedValueSet variable="tourists-awareness" first="0" step="1" last="0.1"/>
+      <steppedValueSet variable="children-protection-level" first="0" step="1" last="0.1"/>
+      <steppedValueSet variable="adults-protection-level" first="0" step="1" last="0.1"/>
+      <steppedValueSet variable="seniors-protection-level" first="0" step="1" last="0.1"/>
+      <steppedValueSet variable="tourists-protection-level" first="0" step="1" last="0.1"/>
+      <steppedValueSet variable="children-prevention-level" first="0" step="1" last="0.1"/>
+      <steppedValueSet variable="adults-prevention-level" first="0" step="1" last="0.1"/>
+      <steppedValueSet variable="seniors-prevention-level" first="0" step="1" last="0.1"/>
+      <steppedValueSet variable="tourists-prevention-level" first="0" step="1" last="0.1"/>
+    </subExperiment>
   </experiment>
 </experiments>
 @#$#@#$#@

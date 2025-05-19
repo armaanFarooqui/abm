@@ -1,0 +1,12 @@
+"BehaviorSpace results (NetLogo 6.4.0)","Spreadsheet version 2.0"
+"ex_3.nlogo"
+"ex_3"
+"05/19/2025 21:43:56:395 +0200"
+"min-pxcor","max-pxcor","min-pycor","max-pycor"
+"-16","16","-16","16"
+"[run number]","1","1","2","2","3","3","4","4","5","5","6","6","7","7","8","8","9","9","10","10"
+"tourists-prevention-level","0",,"0",,"0",,"0",,"0",,"0",,"0",,"0",,"0",,"0",
+"[total steps]","366","366","366","366","366","366","366","366","366","366","366","366","366","366","366","366","366","366","366","366"
+
+"[final value]","[step]","bite-count","[step]","bite-count","[step]","bite-count","[step]","bite-count","[step]","bite-count","[step]","bite-count","[step]","bite-count","[step]","bite-count","[step]","bite-count","[step]","bite-count"
+,"366","7457","366","7497","366","7567","366","7618","366","7480","366","7521","366","7368","366","7498","366","7454","366","7617"
