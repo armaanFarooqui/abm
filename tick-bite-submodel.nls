@@ -5,18 +5,51 @@ to evaluate-tick-bite-risk [temp]
   if temp < 7 [stop]
 
   ask turtles [
-    set exposure-level
-      ifelse-value activity = 1 [0.1]
-      [ifelse-value activity = 2 [0.8]
-      [ifelse-value activity = 3 [0.9]
-      [ifelse-value activity = 4 [0.6]
-      [ifelse-value activity = 5 [0.7]
-      [0.2]]]]]
+    ;; Set exposure-level based on activity type
+    if activity = 1 [ set exposure-level 0.01 ]
+    if activity = 2 [ set exposure-level 0.17 ]
+    if activity = 3 [ set exposure-level 0.02 ]
+    if activity = 4 [ set exposure-level 0.13 ]
+    if activity = 5 [ set exposure-level 0.36 ]
+    if activity = 6 [ set exposure-level 0.02 ]
+    if activity = 7 [ set exposure-level 0.26 ]
 
-    let hazard [tick-density] of patch-here * [patch-risk] of patch-here
-    let vulnerability 1 - (protection-level * awareness)
-    let bite-risk hazard * exposure-level * vulnerability
+    ;; Get month-risk value
+    let month tick-to-month
+    let month-risk 0
+    if month = 1  [ set month-risk 0.002 ]
+    if month = 2  [ set month-risk 0.003 ]
+    if month = 3  [ set month-risk 0.017 ]
+    if month = 4  [ set month-risk 0.065 ]
+    if month = 5  [ set month-risk 0.141 ]
+    if month = 6  [ set month-risk 0.277 ]
+    if month = 7  [ set month-risk 0.264 ]
+    if month = 8  [ set month-risk 0.109 ]
+    if month = 9  [ set month-risk 0.055 ]
+    if month = 10 [ set month-risk 0.044 ]
+    if month = 11 [ set month-risk 0.013 ]
+    if month = 12 [ set month-risk 0.037 ]
 
+    ;; Calculate bite-risk with correct logic
+    ;; Weighted risk calculation
+    let weighted-risk-enhancers (
+  (risk-factor     * 0.20) +
+  (tick-density    * 0.10) +
+  (patch-risk      * 0.15) +
+  (exposure-level  * 0.18) +
+  (month-risk      * 0.25)
+)
+
+let weighted-risk-reducers (
+  ((1 - protection-level) * 0.07) +
+  ((1 - awareness)        * 0.05)
+)
+
+let bite-risk weighted-risk-enhancers * weighted-risk-reducers
+
+
+
+    ;; Stochastic infection based on bite-risk
     if random-float 1 < bite-risk [
       set bite-stat true
       ask patch-here [ set patch-bite-count patch-bite-count + 1 ]	

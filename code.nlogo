@@ -1,62 +1,154 @@
-extensions [gis csv]
+extensions [gis csv] ;; Import GIS and CSV extensions
 
-__includes ["tick-bite-submodel.nls"]
+__includes ["tick-bite-submodel.nls"] ;; Include external file with submodel logic
 
+;; Define agent breeds for residents and tourists by age group
 breed [children child]
 breed [adults adult]
 breed [seniors senior]
-breed [tourists tourist]
+breed [tourists-children tourist-child]
+breed [tourists-adults tourist-adult]
+breed [tourists-seniors tourist-senior]
 
-
+;; Agent variables (both residents and tourists)
 turtles-own [
-  activity risk-factor bite-stat protection-level exposure-level
-  awareness prevention-level age-group
-  original-color
-
+  activity                ;; Current activity type
+  risk-factor             ;; Base bite risk multiplier
+  bite-stat               ;; Bite status (bitten or not)
+  protection-level        ;; Level of protection against bites
+  exposure-level          ;; Exposure to tick habitat
+  awareness               ;; Awareness of tick risk
+  prevention-level        ;; Preventive behavior level
+  age-group               ;; String label for age group
+  original-color          ;; Stored to reset color
+  arrival-tick            ;; Timestep when tourist arrived
 ]
 
 patches-own [
-  landuse agent-count patch-risk tick-density
-  patch-bite-count
+  landuse                 ;; Type of land use
+  agent-count             ;; Count of agents on patch
+  patch-risk              ;; Risk level of patch
+  tick-density            ;; Tick population density
+  patch-bite-count        ;; Bites occurring on this patch
+
 ]
 
+;; Global variables used for datasets, tracking, and output
 globals [
   landuse-dataset shape-dataset
   precipitation temperature
   output-file bite-count new-bites
   weather-list
-  total-bites-children total-bites-adults total-bites-seniors total-bites-tourists
-  new-bites-children new-bites-adults new-bites-seniors new-bites-tourists
+
+  ;; Total cumulative bite counters
+  total-bites-children total-bites-adults total-bites-seniors
+  total-bites-tourists-children total-bites-tourists-adults total-bites-tourists-seniors
+  total-residents-bites total-tourists-bites
+  total-children-population-bites total-adults-population-bites total-seniors-population-bites
+
+  ;; New (this tick) bite counters
+  new-bites-children new-bites-adults new-bites-seniors
+  new-bites-tourists-children new-bites-tourists-adults new-bites-tourists-seniors
+  new-residents-bites new-tourists-bites
+  new-children-population-bites new-adults-population-bites new-seniors-population-bites
+
+  ;; History of bite counts
+  bite-count-history new-count-history
+  total-residents-history total-tourists-history
+  new-residents-history new-tourists-history
+  total-children-population-history total-adults-population-history total-seniors-population-history
+  new-children-population-history new-adults-population-history new-seniors-population-history
+
+  ;; group totals
+  total-children-group-history total-adults-group-history total-seniors-group-history total-tourists-children-group-history total-tourists-adults-group-history total-tourists-seniors-group-history
+  new-children-group-history new-adults-group-history new-seniors-group-history new-tourists-children-group-history new-tourists-adults-group-history new-tourists-seniors-group-history
 ]
 
+;; Convert ticks to month (1–12)
+to-report tick-to-month
+  let day ticks mod 365
+  ifelse day < 31 [report 1]
+  [ifelse day < 59 [report 2]
+  [ifelse day < 90 [report 3]
+  [ifelse day < 120 [report 4]
+  [ifelse day < 151 [report 5]
+  [ifelse day < 181 [report 6]
+  [ifelse day < 212 [report 7]
+  [ifelse day < 243 [report 8]
+  [ifelse day < 273 [report 9]
+  [ifelse day < 304 [report 10]
+  [ifelse day < 334 [report 11]
+                      [report 12]]]]]]]]]]]
+end
+
+;; Setup procedure: initializes everything
 to setup
   clear-all
+  reset-ticks
   file-close-all
 
+  ;; Load weather data
   set weather-list load-weather-data "data/ede_precipitation.csv"
 
+  ;; Setup spatial and agent components
   setup-environment
   setup-agents
-  reset-ticks
-  set bite-count 0
 
+  ;; Initialize bite counters
+  set bite-count 0
   set total-bites-children 0
   set total-bites-adults 0
   set total-bites-seniors 0
-  set total-bites-tourists 0
+  set total-bites-tourists-children 0
+  set total-bites-tourists-adults 0
+  set total-bites-tourists-seniors 0
 
   set new-bites-children 0
   set new-bites-adults 0
   set new-bites-seniors 0
-  set new-bites-tourists 0
+  set new-bites-tourists-children 0
+  set new-bites-tourists-adults 0
+  set new-bites-tourists-seniors 0
 
+  ;; Initialize histories for plotting/analysis
+  set bite-count-history []
+  set new-count-history []
+  set total-residents-history []
+  set total-tourists-history []
+  set new-residents-history []
+  set new-tourists-history []
+
+  set total-children-population-history []
+  set total-adults-population-history []
+  set total-seniors-population-history []
+  set new-children-population-history []
+  set new-adults-population-history []
+  set new-seniors-population-history []
+
+  set total-children-group-history []
+  set total-adults-group-history []
+  set total-seniors-group-history []
+  set total-tourists-children-group-history []
+  set total-tourists-adults-group-history []
+  set total-tourists-seniors-group-history []
+
+  set new-children-group-history []
+  set new-adults-group-history []
+  set new-seniors-group-history []
+  set new-tourists-children-group-history []
+  set new-tourists-adults-group-history []
+  set new-tourists-seniors-group-history []
+
+  ;; Draw the map index
   draw-legend
 
-  file-open "data/agent-output.csv"
-  file-print "tick,agent-type,x,y,activity,bite-stat,age-group,protection-level,awareness,exposure-level,patch-landuse,patch-risk"
+  ;; Prepare CSV output file header
+  file-open "data/outputs/csv/agent-output.csv"
+  file-print "tick,agent-type,activity,bite-stat,patch-landuse"
   file-close
 end
 
+;; Load weather data from CSV
 to-report load-weather-data [filename]
   file-open filename
   let values []
@@ -70,201 +162,400 @@ to-report load-weather-data [filename]
   report values
 end
 
+;; Load GIS landuse raster and shape data, assign patch properties
 to setup-environment
   set landuse-dataset gis:load-dataset "data/Ede/ede_ascii.asc"
   gis:set-world-envelope (gis:envelope-of landuse-dataset)
   gis:apply-raster landuse-dataset landuse
 
   ask patches [
-    if landuse = 20 [set pcolor red set tick-density 0.2 set patch-risk 0.05]; residential
-    if landuse = 60 [set pcolor green set tick-density 1.0 set patch-risk 0.85]; forest
-    if landuse = 61 [set pcolor blue set tick-density 0.6 set patch-risk 0.40]; dunes/ sand
-    if landuse = 62 [set pcolor grey set tick-density 0.3 set patch-risk 0.20]; other
+    ;; Assign tick density and risk based on landuse code
+    if landuse = 20 [set pcolor red set tick-density 1.0 set patch-risk 0.32]; residential
+    if landuse = 60 [set pcolor green set tick-density 0.12 set patch-risk 0.50]; forest
+    if landuse = 61 [set pcolor blue set tick-density 0.03 set patch-risk 0.04]; dunes/ sand
+    if landuse = 62 [set pcolor grey set tick-density 0.00 set patch-risk 0.12]; other
   ]
 
+  ;; Load municipality border
   set shape-dataset gis:load-dataset "data/Ede/Ede_shape.shp"
   gis:set-drawing-color white
   gis:draw shape-dataset 1
   draw-legend
+
+  ;; Initialize bite counter on each patch
   ask patches [ set patch-bite-count 0 ]
 
 end
 
+;; Create the agents
 to setup-agents
+
+  ;; Create residents (children)
   create-children initial-number-children [
     move-to one-of patches with [landuse = 20]
     set color cyan set shape "person"
     set original-color color
-    set risk-factor children-risk-factor
-    set protection-level children-protection-level
-    set awareness children-awareness
-    set prevention-level children-prevention-level
+    set risk-factor 0.24
+    set protection-level ifelse-value use-fixed-protection [children-protection-level] [0.1 + random-float 0.9]
+    set awareness ifelse-value use-fixed-awareness [children-awareness-level] [0.1 + random-float 0.9]
+    set prevention-level ifelse-value use-fixed-prevention [children-prevention-level] [0.1 + random-float 0.9]
     set age-group "child"
   ]
 
+  ;; Create residents (adults)
   create-adults initial-number-adults [
     move-to one-of patches with [landuse = 20]
     set color blue set shape "person"
     set original-color color
-    set risk-factor adults-risk-factor
-    set protection-level adults-protection-level
-    set awareness adults-awareness
-    set prevention-level adults-prevention-level
+    set risk-factor 0.55
+    set protection-level ifelse-value use-fixed-protection [adults-protection-level] [0.1 + random-float 0.9]
+    set awareness ifelse-value use-fixed-awareness [adults-awareness-level] [0.1 + random-float 0.9]
+    set prevention-level ifelse-value use-fixed-prevention [adults-prevention-level] [0.1 + random-float 0.9]
     set age-group "adult"
   ]
 
+  ;; Create residents (seniors)
   create-seniors initial-number-seniors [
     move-to one-of patches with [landuse = 20]
     set color gray set shape "person"
     set original-color color
-    set risk-factor seniors-risk-factor
-    set protection-level seniors-protection-level
-    set awareness seniors-awareness
-    set prevention-level seniors-prevention-level
+    set risk-factor 0.20
+    set protection-level ifelse-value use-fixed-protection [seniors-protection-level] [0.1 + random-float 0.9]
+    set awareness ifelse-value use-fixed-awareness [seniors-awareness-level] [0.1 + random-float 0.9]
+    set prevention-level ifelse-value use-fixed-prevention [seniors-prevention-level] [0.1 + random-float 0.9]
     set age-group "senior"
   ]
 
-  create-tourists initial-number-tourists [
+    ;; Create tourists (children)
+    create-tourists-children tourists-children-number [
     move-to one-of patches with [landuse > 0]
     set color yellow set shape "person"
     set original-color color
     set stay-duration stay-duration
-    set risk-factor tourists-risk-factor
-    set protection-level tourists-protection-level
-    set awareness tourists-awareness
-    set prevention-level tourists-prevention-level
-    set age-group "tourist"
+    set arrival-tick ticks
+    set risk-factor 0.24
+    set protection-level ifelse-value use-fixed-protection [tourist-children-protection] [0.1 + random-float 0.9]
+    set awareness ifelse-value use-fixed-awareness [tourist-children-awareness] [0.1 + random-float 0.9]
+    set prevention-level ifelse-value use-fixed-prevention [tourist-children-prevention] [0.1 + random-float 0.9]
+    set age-group "tourist-child"
   ]
+
+  ;; Create tourists (adults)
+  create-tourists-adults tourists-adults-number [
+    move-to one-of patches with [landuse > 0]
+    set color yellow set shape "person"
+    set original-color color
+    set stay-duration stay-duration
+    set arrival-tick ticks
+    set risk-factor 0.50
+    set protection-level ifelse-value use-fixed-protection [tourist-adults-protection] [0.1 + random-float 0.9]
+    set awareness ifelse-value use-fixed-awareness [tourist-adults-awareness] [0.1 + random-float 0.9]
+    set prevention-level ifelse-value use-fixed-prevention [tourist-adults-prevention] [0.1 + random-float 0.9]
+    set age-group "tourist-adult"
+  ]
+
+  ;; Create tourists (seniors)
+  create-tourists-seniors tourists-seniors-number [
+    move-to one-of patches with [landuse > 0]
+    set color yellow set shape "person"
+    set original-color color
+    set stay-duration stay-duration
+    set arrival-tick ticks
+    set risk-factor 0.20
+    set protection-level ifelse-value use-fixed-protection [tourist-seniors-protection] [0.1 + random-float 0.9]
+    set awareness ifelse-value use-fixed-awareness [tourist-seniors-awareness] [0.1 + random-float 0.9]
+    set prevention-level ifelse-value use-fixed-prevention [tourist-seniors-prevention] [0.1 + random-float 0.9]
+    set age-group "tourist-senior"
+  ]
+
 end
 
 to go
-  if ticks >= length weather-list [export-results stop]
+;; End the simulation when the weather file ends, execute these tasks along with it
+if ticks >= length weather-list [
+    export-results
+    export-bite-count-csv
+    export-new-count-csv
+    export-total-agg
+    export-new-agg
+    export-total-census
+    export-new-census
+    export-total-group
+    export-new-group
+    stop ]
 
-  read-weather
-  assign-activities
-  move-turtles
-  reset-bite-stats
-  evaluate-tick-bite-risk temperature
-  count-bites
-  write-csv-output
-  update-visualization
+  read-weather                      ;; Read temperature and precipitation for current tick
+  assign-activities                 ;; Assign activities to agents based on day and type
+  move-turtles                      ;; Move agents to locations based on activity and weather
+  reset-bite-stats                  ;; Reset bite status before evaluating bites
+  evaluate-tick-bite-risk temperature ;; Compute bite risk and update agent bite status
+  count-bites                       ;; Update counters for new/total bites
+  update-bite-counts                ;; Update patch bite count values
+  write-csv-output                  ;; Log agent-level data to file
+  update-visualization             ;; Update map visuals
   draw-map-title
   draw-legend
+
+  ;; Store bite count history for time series plotting
+  set bite-count-history lput (list ticks bite-count) bite-count-history
+  set new-count-history lput (list ticks new-bites) new-count-history
+
+  ;; Store aggregated bite counts by population (residents vs tourists)
+  set total-residents-history lput (list ticks total-residents-bites) total-residents-history
+  set total-tourists-history lput (list ticks total-tourists-bites) total-tourists-history
+  set new-residents-history lput (list ticks new-residents-bites) new-residents-history
+  set new-tourists-history lput (list ticks new-tourists-bites) new-tourists-history
+
+  ;; Store aggregated bite counts by age population group
+  set total-children-population-history lput (list ticks total-children-population-bites) total-children-population-history
+  set total-adults-population-history lput (list ticks total-adults-population-bites) total-adults-population-history
+  set total-seniors-population-history lput (list ticks total-seniors-population-bites) total-seniors-population-history
+  set new-children-population-history lput (list ticks new-children-population-bites) new-children-population-history
+  set new-adults-population-history lput (list ticks new-adults-population-bites) new-adults-population-history
+  set new-seniors-population-history lput (list ticks new-seniors-population-bites) new-seniors-population-history
+
+  ;; Store aggregated bite counts by agent type (resident/tourist by age group)
+  set total-children-group-history lput (list ticks total-bites-children) total-children-group-history
+  set total-adults-group-history lput (list ticks total-bites-adults) total-adults-group-history
+  set total-seniors-group-history lput (list ticks total-bites-seniors) total-seniors-group-history
+  set total-tourists-children-group-history lput (list ticks total-bites-tourists-children) total-tourists-children-group-history
+  set total-tourists-adults-group-history lput (list ticks total-bites-tourists-adults) total-tourists-adults-group-history
+  set total-tourists-seniors-group-history lput (list ticks total-bites-tourists-seniors) total-tourists-seniors-group-history
+
+  set new-children-group-history lput (list ticks new-bites-children) new-children-group-history
+  set new-adults-group-history lput (list ticks new-bites-adults) new-adults-group-history
+  set new-seniors-group-history lput (list ticks new-bites-seniors) new-seniors-group-history
+  set new-tourists-children-group-history lput (list ticks new-bites-tourists-children) new-tourists-children-group-history
+  set new-tourists-adults-group-history lput (list ticks new-bites-tourists-adults) new-tourists-adults-group-history
+  set new-tourists-seniors-group-history lput (list ticks new-bites-tourists-seniors) new-tourists-seniors-group-history
+
+  ;; Regenerate tourists if their stay has ended (simulating tourist turnover)
+  ask tourists-children [
+  if (ticks - arrival-tick) >= stay-duration [
+    ;; Store current location
+    let where patch-here
+    let n tourists-children-number  ;; Save how many new ones to create
+    let d stay-duration            ;; Save the same stay-duration if desired
+    die
+
+    ;; Spawn new tourists-children at the same patch
+    ask where [
+      sprout-tourists-children n [
+        set stay-duration d
+        set arrival-tick ticks
+        ;; any other setup here
+      ]
+    ]
+  ]
+]
+
+ask tourists-adults [
+  if (ticks - arrival-tick) >= stay-duration [
+    ;; Store current location
+    let where patch-here
+    let n tourists-children-number  ;; Save how many new ones to create
+    let d stay-duration            ;; Save the same stay-duration if desired
+    die
+
+    ;; Spawn new tourists-children at the same patch
+    ask where [
+      sprout-tourists-children n [
+        set stay-duration d
+        set arrival-tick ticks
+        ;; any other setup here
+      ]
+    ]
+  ]
+]
+
+ask tourists-seniors [
+  if (ticks - arrival-tick) >= stay-duration [
+    ;; Store current location
+    let where patch-here
+    let n tourists-children-number  ;; Save how many new ones to create
+    let d stay-duration            ;; Save the same stay-duration if desired
+    die
+
+    ;; Spawn new tourists-children at the same patch
+    ask where [
+      sprout-tourists-children n [
+        set stay-duration d
+        set arrival-tick ticks
+        ;; any other setup here
+      ]
+    ]
+  ]
+]
+
   tick
 end
 
+;; Set weather conditions from the weather csv file
 to read-weather
   let row item ticks weather-list
   set precipitation item 0 row
   set temperature item 1 row
 end
 
-; activities
-; 1 = work
-; 2 = cycling
-; 3 = picnic
-; 4 = walking
-; 5 = playing
-; 6 = school
+;; Activities
+; 1 = dog walking
+; 2 = gardening
+; 3 = green maintenance
+; 4 = playing
+; 5 = walking
+; 6 = picnicking
+; 7 = others
 
+;; Assign activities to agents
 to assign-activities
-  ask children [set activity one-of [2 3 4 5 6]]
 
+  ;; Assign random activities to children and seniors
+  ask children [set activity one-of [1 2 3 4 5 6 7]]
+  ask seniors [set activity one-of [1 2 3 4 5 6 7]]
+
+  ;; Adults have fixed activity on weekdays, random on weekends
   if ticks mod 7 != 6 and ticks mod 7 != 0 [
     ; Weekdays
-    ask adults [set activity 1]
+    ask adults [set activity 5]
   ]
   if ticks mod 7 = 6 or ticks mod 7 = 0 [
     ; Weekends
-    ask adults [set activity one-of [2 3 4]]
+    ask adults [set activity one-of [1 2 3 4 5 6 7]]
   ]
 
-  ask seniors [set activity one-of [2 3 4]]
-  ask tourists [set activity one-of [2 3 4]]
+  ;; Tourists always get random activities
+  ask tourists-children [set activity one-of [1 2 3 4 5 6 7]]
+  ask tourists-adults [set activity one-of [1 2 3 4 5 6 7]]
+  ask tourists-seniors [set activity one-of [1 2 3 4 5 6 7]]
+
 end
 
+;; Move agents to land-use patches based on activity and weather
 to move-turtles
   ask turtles [
-    if (activity = 1 or activity = 4 or activity = 5 or activity = 6) [
+    if (temperature > 25 or precipitation > 50) [
+      move-to one-of patches with [landuse = 20] ;; Prefer residential during bad weather
+
+    ]
+    if (activity = 1 or activity = 2 or activity = 3 or activity = 5) [
       move-to one-of patches with [landuse = 20]
     ]
-    if (activity = 2 or activity = 3 and precipitation < 50) [
+    if (activity = 7) [
+      move-to one-of patches with [landuse = 62]
+    ]
+    if (activity = 4 or activity = 6) [
       move-to one-of patches with [landuse = 60 or landuse = 61]
     ]
     if (temperature > 25) [move-to one-of patches with [landuse = 20]]
   ]
 end
 
+;; Reset each agent’s bite status to false at start of each tick
 to reset-bite-stats
   ask turtles [set bite-stat false]
 end
 
 to count-bites
+
+  ;; Count new bites per agent group
   set new-bites-children count children with [bite-stat]
   set new-bites-adults count adults with [bite-stat]
   set new-bites-seniors count seniors with [bite-stat]
-  set new-bites-tourists count tourists with [bite-stat]
+  set new-bites-tourists-children count tourists-children with [bite-stat]
+  set new-bites-tourists-adults count tourists-adults with [bite-stat]
+  set new-bites-tourists-seniors count tourists-seniors with [bite-stat]
 
-  set new-bites (new-bites-children + new-bites-adults + new-bites-seniors + new-bites-tourists)
+  ;; Total new bites this tick
+  set new-bites (new-bites-children + new-bites-adults + new-bites-seniors + new-bites-tourists-children + new-bites-tourists-adults + new-bites-tourists-seniors)
+
+  ;; Cumulative total bites
   set bite-count bite-count + new-bites
 
+  ;; Update group-specific cumulative counts
   set total-bites-children total-bites-children + new-bites-children
   set total-bites-adults total-bites-adults + new-bites-adults
   set total-bites-seniors total-bites-seniors + new-bites-seniors
-  set total-bites-tourists total-bites-tourists + new-bites-tourists
+  set total-bites-tourists-children total-bites-tourists-children + new-bites-tourists-children
+  set total-bites-tourists-adults total-bites-tourists-adults + new-bites-tourists-adults
+  set total-bites-tourists-seniors total-bites-tourists-seniors + new-bites-tourists-seniors
+
+  ;; Total by population type
+  set new-residents-bites (new-bites-children + new-bites-adults + new-bites-seniors)
+  set new-tourists-bites (new-bites-tourists-children + new-bites-tourists-adults + new-bites-tourists-seniors)
+  set total-residents-bites (total-bites-children + total-bites-adults + total-bites-seniors)
+  set total-tourists-bites (total-bites-tourists-children + total-bites-tourists-adults + total-bites-tourists-seniors)
+
+  ;; Combined population-level counts
+  set new-children-population-bites (new-bites-children + new-bites-tourists-children)
+  set new-adults-population-bites (new-bites-adults + new-bites-tourists-adults)
+  set new-seniors-population-bites (new-bites-seniors + new-bites-tourists-seniors)
+  set total-children-population-bites (total-bites-children + total-bites-tourists-children)
+  set total-adults-population-bites (total-bites-adults + total-bites-tourists-adults)
+  set total-seniors-population-bites (total-bites-seniors + total-bites-tourists-seniors)
+
 end
 
-
+;; Export agent-level data for each tick to a CSV file
 to write-csv-output
-  file-open "data/agent-output.csv"
+  file-open "data/outputs/csv/agent-output.csv"
   ask turtles [
     let agent-type ""
     if is-child? self [set agent-type "child"]
     if is-adult? self [set agent-type "adult"]
     if is-senior? self [set agent-type "senior"]
-    if is-tourist? self [set agent-type "tourist"]
+    if is-tourist-child? self [set agent-type "tourist-child"]
+    if is-tourist-adult? self [set agent-type "tourist-adult"]
+    if is-tourist-senior? self [set agent-type "tourist-senior"]
+
 
     file-print ( (word ticks ","
                       agent-type ","
-                      xcor ","
-                      ycor ","
                       activity ","
                       bite-stat ","
-                      age-group ","
-                      protection-level ","
-                      awareness ","
-                      exposure-level ","
-                      [landuse] of patch-here ","
-                      [patch-risk] of patch-here) )
+                      landuse))
   ]
   file-close
 end
 
+to update-bite-counts
+  ;; Always reset patch bite counts each tick
+  ;;ask patches [ set patch-bite-count 0 ]
 
-to export-results
-  set output-file gis:patch-dataset agent-count
-  gis:store-dataset output-file "data/output_ascii.asc"
+  ;; Now add bites from this tick
+  ask turtles with [bite-stat] [
+    ask patch-here [
+      set patch-bite-count patch-bite-count + 1
+    ]
+  ]
 end
 
+
+;; Export raster dataset of agent counts per patch
+to export-results
+  set output-file gis:patch-dataset patch-bite-count
+  gis:store-dataset output-file "data/outputs/tick_bite_heatmap.asc"
+end
+
+;; Update the color of the patches and turtles based on the selected visualization layer
 to update-visualization
-  ifelse show-bite-heatmap [
+  ifelse show-bite-heatmap [;; Show red-scaled heatmap of bite counts per patch
     let max-bites max [patch-bite-count] of patches
-    if max-bites = 0 [ set max-bites 1 ] ;; avoid division by zero when no bites yet
+    if max-bites = 0 [ set max-bites 1 ] ;; Avoid division by zero when no bites yet
     ask patches [
       set pcolor scale-color red patch-bite-count 0 max-bites
     ]
   ] [
-    ifelse show-tick-density [
+    ifelse show-tick-density [;; Show green-scaled heatmap of tick density
       ask patches [
         set pcolor scale-color green tick-density 0 1
       ]
     ] [
-      ifelse show-patch-risk [
+      ifelse show-patch-risk [;; Show red-scaled heatmap of calculated patch risk
         ask patches [
           set pcolor scale-color red patch-risk 0 1
         ]
       ] [
-        ;; Default landuse-based coloring
+        ;; Default view: color patches by land use class
         ask patches [
           if landuse = 20 [ set pcolor red ]
           if landuse = 60 [ set pcolor green ]
@@ -275,6 +566,7 @@ to update-visualization
     ]
   ]
 
+  ;; Update turtle color based on whether they have been bitten
   ask turtles [
     if bite-stat [
       set color black
@@ -285,9 +577,7 @@ to update-visualization
   ]
 end
 
-
-
-
+;; Draw a legend on the map explaining the current visualization
 to draw-legend
   ; Clear previous legend
   ask patches with [pxcor > (max-pxcor - 8) and pycor < (min-pycor + 5)] [
@@ -295,18 +585,19 @@ to draw-legend
     set plabel ""
   ]
 
+  ;; Show legend depending on which layer is being visualized
   if show-tick-density [
     let y min-pycor
     show-legend-entry (max-pxcor - 7) (min-pycor + 3) "Low Density" white
-    show-legend-entry (max-pxcor - 7) (min-pycor + 2) "Medium Density" 56
-    show-legend-entry (max-pxcor - 7) (min-pycor + 1) "High Density" 53
+    show-legend-entry (max-pxcor - 7) (min-pycor + 2) "Medium Density" 53
+    show-legend-entry (max-pxcor - 7) (min-pycor + 1) "High Density" 51
 
   ]
 
   if show-patch-risk [
-    show-legend-entry (max-pxcor - 6) (min-pycor + 3) "Low Risk" 19
-    show-legend-entry (max-pxcor - 6) (min-pycor + 2) "Medium Risk" 14
-    show-legend-entry (max-pxcor - 6) (min-pycor + 1) "High Risk" 12
+    show-legend-entry (max-pxcor - 6) (min-pycor + 3) "Low Risk" 14
+    show-legend-entry (max-pxcor - 6) (min-pycor + 2) "Medium Risk" 12
+    show-legend-entry (max-pxcor - 6) (min-pycor + 1) "High Risk" black
   ]
 
   if show-bite-heatmap [
@@ -323,8 +614,10 @@ to draw-legend
   ]
 end
 
+;; Display a single entry in the legend
 to show-legend-entry [x y caption swatch-color]
 
+  ;; Draw color swatch and label for legend
   if not show-tick-density [
   ask patch x y [
     set pcolor swatch-color
@@ -340,13 +633,143 @@ to show-legend-entry [x y caption swatch-color]
   ]
 end
 
+;; Draw map title and a North arrow
 to draw-map-title
-
   ask patch (max-pxcor / 6) max-pycor [ set plabel "Ede, The Netherlands" ]
   ask patch (max-pxcor / 6) (max-pycor - 2) [ set plabel "Tick Bite Risk Simulation" ]
-
-  ; North arrow
   ask patch min-pxcor max-pycor [ set plabel "N" ]
+end
+
+;; Export bite counts per tick to CSV
+to export-bite-count-csv
+  file-open "data/outputs/csv/bite_count.csv"
+  file-print "tick,bite-count"
+  foreach bite-count-history [
+    row -> file-print (word item 0 row "," item 1 row)
+  ]
+  file-close
+end
+
+;; Export new bite counts per tick to CSV
+to export-new-count-csv
+  file-open "data/outputs/csv/new_count.csv"
+  file-print "tick,new-count"
+  foreach new-count-history [
+    row -> file-print (word item 0 row "," item 1 row)
+  ]
+  file-close
+end
+
+;; Export total bite counts for residents and tourists to CSV
+to export-total-agg
+  file-open "data/outputs/csv/total_agg.csv"
+  file-print "tick,total-residents-bites,total-tourists-bites"
+
+  let n length total-residents-history
+  (foreach n-values n [ i -> i ] [
+    i ->
+    let tick-value item 0 (item i total-residents-history)
+    let residents-bite item 1 (item i total-residents-history)
+    let tourists-bite item 1 (item i total-tourists-history)
+    file-print (word tick-value "," residents-bite "," tourists-bite)
+  ])
+
+  file-close
+end
+
+;; Export new bite counts for residents and tourists to CSV
+to export-new-agg
+  file-open "data/outputs/csv/new_agg.csv"
+  file-print "tick,new-residents-bites,new-tourists-bites"
+
+  let n length new-residents-history
+  (foreach n-values n [ i -> i ] [
+    i ->
+    let tick-value item 0 (item i new-residents-history)
+    let residents-bite item 1 (item i new-residents-history)
+    let tourists-bite item 1 (item i new-tourists-history)
+    file-print (word tick-value "," residents-bite "," tourists-bite)
+  ])
+
+  file-close
+end
+
+;; Export total bite counts by age group to CSV
+to export-total-census
+  file-open "data/outputs/csv/total_census.csv"
+  file-print "tick,total-children-bites,total-adults-bites,total-seniors-bites"
+
+  let n length total-children-population-history
+  (foreach n-values n [ i -> i ] [
+    i ->
+    let tick-value item 0 (item i total-children-population-history)
+    let children-bite item 1 (item i total-children-population-history)
+    let adults-bite item 1 (item i total-adults-population-history)
+    let seniors-bite item 1 (item i total-seniors-population-history)
+    file-print (word tick-value "," children-bite "," adults-bite "," seniors-bite)
+  ])
+
+  file-close
+end
+
+;; Export new bite counts by age group to CSV
+to export-new-census
+  file-open "data/outputs/csv/new_census.csv"
+  file-print "tick,new-children-bites,new-adults-bites,new-seniors-bites"
+
+  let n length new-children-population-history
+  (foreach n-values n [ i -> i ] [
+    i ->
+    let tick-value item 0 (item i new-children-population-history)
+    let children-bite item 1 (item i new-children-population-history)
+    let adults-bite item 1 (item i new-adults-population-history)
+    let seniors-bite item 1 (item i new-seniors-population-history)
+    file-print (word tick-value "," children-bite "," adults-bite "," seniors-bite)
+  ])
+
+  file-close
+end
+
+;; Export total bite counts by group and age (residents and tourists) to CSV
+to export-total-group
+  file-open "data/outputs/csv/total_group.csv"
+  file-print "tick,total-children-bites,total-adults-bites,total-seniors-bites,total-tourists-children-bites,total-tourists-adults-bites,total-tourists-seniors-bites"
+
+  let n length total-children-group-history
+  (foreach n-values n [ i -> i ] [
+    i ->
+    let tick-value item 0 (item i total-children-group-history)
+    let children-bite item 1 (item i total-children-group-history)
+    let adults-bite item 1 (item i total-adults-group-history)
+    let seniors-bite item 1 (item i total-seniors-group-history)
+    let tourists-children-bite item 1 (item i total-tourists-children-group-history)
+    let tourists-adults-bite item 1 (item i total-tourists-adults-group-history)
+    let tourists-seniors-bite item 1 (item i total-tourists-seniors-group-history)
+    file-print (word tick-value "," children-bite "," adults-bite "," seniors-bite "," tourists-children-bite "," tourists-adults-bite "," tourists-seniors-bite)
+  ])
+
+  file-close
+end
+
+;; Export new bite counts by group and age (residents and tourists) to CSV
+to export-new-group
+  file-open "data/outputs/csv/new_group.csv"
+  file-print "tick,new-children-bites,new-adults-bites,new-seniors-bites,new-tourists-children-bites,new-tourists-adults-bites,new-tourists-seniors-bites"
+
+  let n length new-children-group-history
+  (foreach n-values n [ i -> i ] [
+    i ->
+    let tick-value item 0 (item i new-children-group-history)
+    let children-bite item 1 (item i new-children-group-history)
+    let adults-bite item 1 (item i new-adults-group-history)
+    let seniors-bite item 1 (item i new-seniors-group-history)
+    let tourists-children-bite item 1 (item i new-tourists-children-group-history)
+    let tourists-adults-bite item 1 (item i new-tourists-adults-group-history)
+    let tourists-seniors-bite item 1 (item i new-tourists-seniors-group-history)
+    file-print (word tick-value "," children-bite "," adults-bite "," seniors-bite "," tourists-children-bite "," tourists-adults-bite "," tourists-seniors-bite)
+  ])
+
+  file-close
 end
 @#$#@#$#@
 GRAPHICS-WINDOW
@@ -421,21 +844,6 @@ bite-count
 1
 11
 
-SLIDER
-11
-147
-176
-180
-initial-number-tourists
-initial-number-tourists
-0
-100
-40.0
-10
-1
-NIL
-HORIZONTAL
-
 MONITOR
 92
 57
@@ -448,132 +856,57 @@ new-bites
 11
 
 SLIDER
-11
-466
-170
-499
-children-risk-factor
-children-risk-factor
-0
-2
-1.0
-0.1
-1
-NIL
-HORIZONTAL
-
-SLIDER
-179
-467
-327
-500
-adults-risk-factor
-adults-risk-factor
-0
-2
-0.2
-0.1
-1
-NIL
-HORIZONTAL
-
-SLIDER
-333
-467
-483
-500
-seniors-risk-factor
-seniors-risk-factor
-0
-2
-1.0
-0.1
-1
-NIL
-HORIZONTAL
-
-SLIDER
-491
-468
-649
-501
-tourists-risk-factor
-tourists-risk-factor
-0
-2
-1.0
-0.1
-1
-NIL
-HORIZONTAL
-
-SLIDER
-11
-558
-172
-591
+13
+371
+187
+404
 children-protection-level
 children-protection-level
 0
 1
-0.3
+0.5
 0.1
 1
 NIL
 HORIZONTAL
 
 SLIDER
-178
-558
-327
-591
+13
+404
+188
+437
 adults-protection-level
 adults-protection-level
 0
 1
-0.4
+0.5
 0.1
 1
 NIL
 HORIZONTAL
 
 SLIDER
-335
-559
-486
-592
+13
+438
+189
+471
 seniors-protection-level
 seniors-protection-level
 0
 1
-0.3
+0.5
 0.1
 1
 NIL
 HORIZONTAL
 
 SLIDER
-493
-559
-652
-592
-tourists-protection-level
-tourists-protection-level
-0
-1
-0.3
-0.1
-1
-NIL
-HORIZONTAL
-
-SLIDER
-11
-513
-171
-546
-children-awareness
-children-awareness
+12
+472
+190
+505
+tourist-children-protection
+tourist-children-protection
 0
 1
 0.5
@@ -583,12 +916,12 @@ NIL
 HORIZONTAL
 
 SLIDER
-177
-513
-326
-546
-adults-awareness
-adults-awareness
+210
+456
+434
+489
+children-prevention-level
+children-prevention-level
 0
 1
 0.5
@@ -598,12 +931,12 @@ NIL
 HORIZONTAL
 
 SLIDER
-334
-513
-485
-546
-seniors-awareness
-seniors-awareness
+434
+456
+647
+489
+adults-prevention-level
+adults-prevention-level
 0
 1
 0.5
@@ -613,55 +946,10 @@ NIL
 HORIZONTAL
 
 SLIDER
+210
 490
-512
-650
-545
-tourists-awareness
-tourists-awareness
-0
-1
-0.5
-0.1
-1
-NIL
-HORIZONTAL
-
-SLIDER
-12
-606
-172
-639
-children-prevention-level
-children-prevention-level
-0
-1
-0.5
-0.1
-1
-NIL
-HORIZONTAL
-
-SLIDER
-178
-605
-327
-638
-adults-prevention-level
-adults-prevention-level
-0
-1
-0.5
-0.1
-1
-NIL
-HORIZONTAL
-
-SLIDER
-335
-606
-487
-639
+434
+523
 seniors-prevention-level
 seniors-prevention-level
 0
@@ -673,12 +961,12 @@ NIL
 HORIZONTAL
 
 SLIDER
-493
-605
-653
-638
-tourists-prevention-level
-tourists-prevention-level
+434
+490
+646
+523
+tourist-children-prevention
+tourist-children-prevention
 0
 1
 0.5
@@ -689,211 +977,577 @@ HORIZONTAL
 
 SLIDER
 12
-652
-173
-685
+116
+183
+149
 stay-duration
 stay-duration
 1
 30
-10.0
+29.0
 1
 1
 NIL
 HORIZONTAL
 
 PLOT
-11
-191
-171
-311
+15
+728
+335
+944
 Total Bites
-NIL
-NIL
+Time
+Tick Bites
 0.0
 10.0
 0.0
 10.0
 true
-false
+true
 "" ""
 PENS
-"default" 1.0 0 -16777216 true "" "plot bite-count"
+"Total Bites" 1.0 0 -16777216 true "" "plot bite-count"
 
 PLOT
-12
-322
-172
-442
+336
+728
+648
+944
 New Bites
-NIL
-NIL
+Time
+Tick Bites
 0.0
 10.0
 0.0
 10.0
 true
-false
+true
 "" ""
 PENS
-"default" 1.0 0 -16777216 true "" "plot new-bites"
+"New Bites" 1.0 0 -16777216 true "" "plot new-bites"
 
 PLOT
-12
-696
-294
-880
-Total Bites (by group)
+15
+1376
+336
+1589
+Total Bites (By Group)
 Time
-Cumulative Bites
+Tick Bites
 0.0
 10.0
 0.0
 10.0
 true
-false
+true
 "" ""
 PENS
-"children" 1.0 0 -11221820 true "" "plotxy ticks total-bites-children"
-"adults" 1.0 0 -13345367 true "" "plotxy ticks total-bites-adults"
-"seniors" 1.0 0 -16777216 true "" "plotxy ticks total-bites-seniors"
-"tourists" 1.0 0 -1184463 true "" "plotxy ticks total-bites-tourists"
+"Children" 1.0 0 -8053223 true "" "plotxy ticks total-bites-children"
+"Adults" 1.0 0 -13210332 true "" "plotxy ticks total-bites-adults"
+"Seniors" 1.0 0 -14730904 true "" "plotxy ticks total-bites-seniors"
+"Tourist Children" 1.0 0 -11053225 true "" "plotxy ticks total-bites-tourists-children"
+"Tourist Adults" 1.0 0 -10402772 true "" "plotxy ticks total-bites-tourists-adults"
+"Tourist Seniors" 1.0 0 -4079321 true "" "plotxy ticks total-bites-tourists-seniors"
 
 PLOT
-309
-695
-608
-880
-New Bites (by group)
+336
+1376
+648
+1589
+New Bites (By Group)
 Time
-New Bites per Tick
+Tick Bites
 0.0
 10.0
 0.0
 10.0
 true
-false
+true
 "" ""
 PENS
-"children" 1.0 0 -11221820 true "" "plotxy ticks new-bites-children"
-"adults" 1.0 0 -13345367 true "" "plotxy ticks new-bites-adults"
-"seniors" 1.0 0 -16777216 true "" "plotxy ticks new-bites-seniors"
-"tourists" 1.0 0 -1184463 true "" "plotxy ticks new-bites-seniors"
+"Children" 1.0 0 -8053223 true "" "plotxy ticks new-bites-children"
+"Adults" 1.0 0 -13210332 true "" "plotxy ticks new-bites-adults"
+"Seniors" 1.0 0 -14730904 true "" "plotxy ticks new-bites-seniors"
+"Tourist Children" 1.0 0 -11053225 true "" "plotxy ticks new-bites-tourists-children"
+"Tourist Adults" 1.0 0 -10402772 true "" "plotxy ticks new-bites-tourists-adults"
+"Tourist Seniors" 1.0 0 -4079321 true "" "plotxy ticks new-bites-tourists-seniors"
+
+SLIDER
+14
+589
+230
+622
+initial-number-children
+initial-number-children
+0
+100
+30.0
+10
+1
+NIL
+HORIZONTAL
+
+SLIDER
+231
+589
+439
+622
+initial-number-adults
+initial-number-adults
+0
+100
+60.0
+10
+1
+NIL
+HORIZONTAL
+
+SLIDER
+439
+589
+648
+622
+initial-number-seniors
+initial-number-seniors
+0
+100
+30.0
+10
+1
+NIL
+HORIZONTAL
+
+SWITCH
+15
+655
+231
+688
+show-tick-density
+show-tick-density
+1
+1
+-1000
+
+SWITCH
+231
+655
+439
+688
+show-patch-risk
+show-patch-risk
+1
+1
+-1000
+
+SWITCH
+440
+656
+648
+689
+show-bite-heatmap
+show-bite-heatmap
+1
+1
+-1000
+
+SWITCH
+15
+689
+231
+722
+use-fixed-protection
+use-fixed-protection
+1
+1
+-1000
+
+SWITCH
+232
+689
+439
+722
+use-fixed-prevention
+use-fixed-prevention
+1
+1
+-1000
 
 SLIDER
 13
-887
+149
+183
+182
+children-awareness-level
+children-awareness-level
+0.1
+1.0
+0.5
+0.1
+1
+NIL
+HORIZONTAL
+
+SLIDER
+13
+182
+184
+215
+adults-awareness-level
+adults-awareness-level
+0.0
+1.0
+0.5
+0.1
+1
+NIL
+HORIZONTAL
+
+SLIDER
+13
+215
+184
+248
+seniors-awareness-level
+seniors-awareness-level
+0.1
+1.0
+0.5
+0.1
+1
+NIL
+HORIZONTAL
+
+SWITCH
+440
+689
+648
+722
+use-fixed-awareness
+use-fixed-awareness
+1
+1
+-1000
+
+SLIDER
+14
+622
+230
+655
+tourists-children-number
+tourists-children-number
+0
+100
+20.0
+10
+1
+NIL
+HORIZONTAL
+
+SLIDER
+230
+623
+440
+656
+tourists-adults-number
+tourists-adults-number
+0
+100
+20.0
+10
+1
+NIL
+HORIZONTAL
+
+SLIDER
+440
+623
+648
+656
+tourists-seniors-number
+tourists-seniors-number
+0
+100
+20.0
+10
+1
+NIL
+HORIZONTAL
+
+PLOT
+15
+945
+335
+1159
+Total Bites (Aggregated Groups)
+Time
+Tick Bites
+0.0
+10.0
+0.0
+10.0
+true
+true
+"" ""
+PENS
+"Residents" 1.0 0 -8053223 true "" "plotxy ticks total-residents-bites"
+"Tourists" 1.0 0 -14730904 true "" "plotxy ticks total-tourists-bites"
+
+PLOT
+336
+944
+648
+1160
+New Bites (Aggregated Groups)
+Time
+Tick Bites
+0.0
+10.0
+0.0
+10.0
+true
+true
+"" ""
+PENS
+"Residents" 1.0 0 -8053223 true "" "plotxy ticks new-residents-bites"
+"Tourists" 1.0 0 -14730904 true "" "plotxy ticks new-tourists-bites"
+
+PLOT
+15
+1160
+334
+1375
+Total Bites (Census Populations)
+Time
+Tick Bites
+0.0
+10.0
+0.0
+10.0
+true
+true
+"" ""
+PENS
+"Children" 1.0 0 -8053223 true "" "plotxy ticks total-children-population-bites"
+"Adults" 1.0 0 -13210332 true "" "plotxy ticks total-adults-population-bites"
+"Seniors" 1.0 0 -14730904 true "" "plotxy ticks total-seniors-population-bites"
+
+PLOT
+336
+1160
+648
+1376
+New Bites (Census Populations)
+Time
+Tick Bites
+0.0
+10.0
+0.0
+10.0
+true
+true
+"" ""
+PENS
+"Children" 1.0 0 -8053223 true "" "plotxy ticks new-children-population-bites"
+"Adults" 1.0 0 -13210332 true "" "plotxy ticks new-adults-population-bites"
+"Seniors" 1.0 0 -14730904 true "" "plotxy ticks new-seniors-population-bites"
+
+SLIDER
+13
+249
+185
+282
+tourist-children-awareness
+tourist-children-awareness
+0
+1
+0.5
+0.1
+1
+NIL
+HORIZONTAL
+
+SLIDER
+12
+282
+185
+315
+tourist-adults-awareness
+tourist-adults-awareness
+0
+1.0
+0.5
+0.1
+1
+NIL
+HORIZONTAL
+
+SLIDER
+12
+314
+185
+347
+tourist-seniors-awareness
+tourist-seniors-awareness
+0
+1.0
+0.5
+0.1
+1
+NIL
+HORIZONTAL
+
+SLIDER
+12
+505
+190
+538
+tourist-adults-protection
+tourist-adults-protection
+0
+1.0
+0.5
+0.1
+1
+NIL
+HORIZONTAL
+
+SLIDER
+12
+538
 191
-920
-initial-number-children
-initial-number-children
+571
+tourist-seniors-protection
+tourist-seniors-protection
 0
-100
-20.0
-10
+1
+0.5
+0.1
 1
 NIL
 HORIZONTAL
 
 SLIDER
-200
-891
-372
-924
-initial-number-adults
-initial-number-adults
+210
+524
+435
+557
+tourist-adults-prevention
+tourist-adults-prevention
 0
-100
-40.0
-10
+1.0
+0.5
+0.1
 1
 NIL
 HORIZONTAL
 
 SLIDER
-383
-895
-556
-928
-initial-number-seniors
-initial-number-seniors
+434
+524
+647
+557
+tourist-seniors-prevention
+tourist-seniors-prevention
 0
-100
-20.0
-10
+1.0
+0.5
+0.1
 1
 NIL
 HORIZONTAL
-
-SWITCH
-17
-932
-172
-965
-show-tick-density
-show-tick-density
-1
-1
--1000
-
-SWITCH
-187
-936
-333
-969
-show-patch-risk
-show-patch-risk
-1
-1
--1000
-
-SWITCH
-349
-939
-514
-972
-show-bite-heatmap
-show-bite-heatmap
-1
-1
--1000
 
 @#$#@#$#@
+# Tick Bite Risk Simulation – Ede, The Netherlands
+
 ## WHAT IS IT?
 
-(a general understanding of what the model is trying to show or explain)
+This model simulates tick bite risk across a spatially-explicit landscape in Ede, the Netherlands. The simulation accounts for environmental features such as land use types, spatial tick densities, and human populations. It produces visual maps and exports various CSV datasets to support further analysis of bite risk, human exposure, and group-level statistics.
+
+## WHY IS THIS MODEL INTERESTING?
+
+Ticks are vectors for serious diseases like Lyme borreliosis. Understanding how environmental features and human behavior affect tick bite risk is essential for public health and spatial planning. This model visualizes risk dynamically and provides structured output data for epidemiological or ecological analysis.
 
 ## HOW IT WORKS
 
-(what rules the agents use to create the overall behavior of the model)
+The model operates on a GIS-based landscape where patches represent spatial units with different land use types and tick densities. Agents (turtles) represent humans who can receive tick bites based on local risk levels. The model records bite events over time and categorizes them by group (residents vs. tourists, age categories, etc.).
+
+The model supports several visualization modes:
+
+* **Bite Heatmap**: Shows number of bites per patch.
+* **Tick Density**: Displays static tick density per patch.
+* **Patch Risk**: Visualizes model-computed tick bite risk.
+* **Land Use Map**: Colors patches by land use category.
+
+Users can toggle these visualizations and observe how tick bite risk evolves over time.
+
+## VISUALIZATION & LEGEND
+
+The `update-visualization` procedure colors patches and agents depending on the current display mode:
+
+* Red gradient: Number of bites (heatmap)
+* Green gradient: Tick density
+* Land use:
+-- Red: Residential (code 20)
+-- Green: Forest (code 60)
+-- Blue: Dunes/Sand (code 61)
+-- Gray: Other (code 62)
+
+Legends are dynamically drawn in the lower-right corner of the map depending on the active visualization.
+
+A map title and north arrow are shown at the top of the view.
+
+## OUTPUT EXPORTS
+
+### Raster Output:
+
+* `output_ascii.asc`: An ASCII grid file storing patch-level agent count for GIS use.
+
+### CSV Time-Series Data:
+
+Each CSV is stored in the `data/outputs/csv/` directory.
+
+* **Bite Counts**:
+
+  * `bite_count.csv`: Total bite count per tick.
+  *  &nbsp; &nbsp; &nbsp;`new_count.csv`: New bites per tick (incremental).
+
+* **Aggregate Bites**:
+
+  * `total_agg.csv`: Cumulative resident vs. tourist bites.
+  * &nbsp; &nbsp; &nbsp;`new_agg.csv`: New resident vs. tourist bites per tick.
+
+* **Census Bites (by Age Group)**:
+
+  * `total_census.csv`: Cumulative bites by children, adults, seniors.
+  * &nbsp; &nbsp; &nbsp;`new_census.csv`: New bites per tick by age group.
+
+* **Group Bites (Residents + Tourists, by Age Group)**:
+
+  * `total_group.csv`: Total bites by age and population type.
+  * &nbsp; &nbsp; &nbsp;`new_group.csv`: New bites by age and population type.
+
+These outputs enable users to analyze temporal dynamics of tick exposure across groups and locations.
 
 ## HOW TO USE IT
 
-(how to use the model, including a description of each of the items in the Interface tab)
+1. Load the model and initialize the environment.
+2. Use the interface controls to start the simulation.
+3. Toggle visualization options to inspect different layers.
+4. After running, use the export buttons or procedures to generate output files.
+5. Analyze exported CSV or ASCII raster data in external tools, like QGIS.
 
-## THINGS TO NOTICE
+## EXTENSIONS USED
 
-(suggested things for the user to notice while running the model)
-
-## THINGS TO TRY
-
-(suggested things for the user to try to do (move sliders, switches, etc.) with the model)
-
-## EXTENDING THE MODEL
-
-(suggested things to add or change in the Code tab to make the model more complicated, detailed, accurate, etc.)
-
-## NETLOGO FEATURES
-
-(interesting or unusual features of NetLogo that the model uses, particularly in the Code tab; or where workarounds were needed for missing features)
+* GIS Extension: Used for storing raster datasets (e.g., agent counts per patch).
+* CSV Extension: Used for reading and writing CSV files.
 
 ## RELATED MODELS
 
-(models in the NetLogo Models Library and elsewhere which are of related interest)
+This model is inspired by spatial agent-based models used in disease ecology and environmental epidemiology, particularly those simulating vector-host interactions in heterogeneous landscapes.
 
 ## CREDITS AND REFERENCES
 
-(a reference to the model's URL on the web if it has one, as well as any other necessary credits, citations, and links)
+Model developed for spatial epidemiological analysis of tick bite risk in Ede, the Netherlands.
 @#$#@#$#@
 default
 true
@@ -1231,37 +1885,50 @@ NetLogo 6.4.0
     <steppedValueSet variable="initial-number-residents" first="0" step="100" last="1000"/>
     <steppedValueSet variable="initial-number-tourists" first="0" step="100" last="1000"/>
   </experiment>
-  <experiment name="baseline_simulation" repetitions="10" runMetricsEveryStep="false">
+  <experiment name="baseline_simulation" repetitions="10" runMetricsEveryStep="true">
     <setup>setup</setup>
-    <go>repeat 366 [ go ]</go>
+    <go>go</go>
+    <timeLimit steps="400"/>
     <metric>bite-count</metric>
     <metric>total-bites-children</metric>
     <metric>total-bites-adults</metric>
     <metric>total-bites-seniors</metric>
     <metric>total-bites-tourists</metric>
-    <subExperiment>
-      <steppedValueSet variable="initial-number-children" first="0" step="100" last="10"/>
-      <steppedValueSet variable="initial-number-adults" first="0" step="100" last="10"/>
-      <steppedValueSet variable="initial-number-seniors" first="0" step="100" last="10"/>
-      <steppedValueSet variable="initial-number-tourists" first="0" step="100" last="10"/>
-      <steppedValueSet variable="stay-duration" first="0" step="30" last="1"/>
-      <steppedValueSet variable="children-risk-factor" first="0" step="2" last="0.2"/>
-      <steppedValueSet variable="adults-risk-factor" first="0" step="2" last="0.2"/>
-      <steppedValueSet variable="seniors-risk-factor" first="0" step="2" last="0.2"/>
-      <steppedValueSet variable="tourists-risk-factor" first="0" step="2" last="0.2"/>
-      <steppedValueSet variable="children-awareness" first="0" step="1" last="0.1"/>
-      <steppedValueSet variable="adults-awareness" first="0" step="1" last="0.1"/>
-      <steppedValueSet variable="seniors-awareness" first="0" step="1" last="0.1"/>
-      <steppedValueSet variable="tourists-awareness" first="0" step="1" last="0.1"/>
-      <steppedValueSet variable="children-protection-level" first="0" step="1" last="0.1"/>
-      <steppedValueSet variable="adults-protection-level" first="0" step="1" last="0.1"/>
-      <steppedValueSet variable="seniors-protection-level" first="0" step="1" last="0.1"/>
-      <steppedValueSet variable="tourists-protection-level" first="0" step="1" last="0.1"/>
-      <steppedValueSet variable="children-prevention-level" first="0" step="1" last="0.1"/>
-      <steppedValueSet variable="adults-prevention-level" first="0" step="1" last="0.1"/>
-      <steppedValueSet variable="seniors-prevention-level" first="0" step="1" last="0.1"/>
-      <steppedValueSet variable="tourists-prevention-level" first="0" step="1" last="0.1"/>
-    </subExperiment>
+    <steppedValueSet variable="initial-number-children" first="0" step="100" last="10"/>
+    <steppedValueSet variable="initial-number-adults" first="0" step="100" last="10"/>
+    <steppedValueSet variable="initial-number-seniors" first="0" step="100" last="10"/>
+    <steppedValueSet variable="initial-number-tourists" first="0" step="100" last="10"/>
+    <steppedValueSet variable="stay-duration" first="0" step="30" last="1"/>
+    <steppedValueSet variable="children-risk-factor" first="0" step="2" last="0.2"/>
+    <steppedValueSet variable="adults-risk-factor" first="0" step="2" last="0.2"/>
+    <steppedValueSet variable="seniors-risk-factor" first="0" step="2" last="0.2"/>
+    <steppedValueSet variable="tourists-risk-factor" first="0" step="2" last="0.2"/>
+    <steppedValueSet variable="children-awareness" first="0" step="1" last="0.1"/>
+    <steppedValueSet variable="adults-awareness" first="0" step="1" last="0.1"/>
+    <steppedValueSet variable="seniors-awareness" first="0" step="1" last="0.1"/>
+    <steppedValueSet variable="tourists-awareness" first="0" step="1" last="0.1"/>
+    <steppedValueSet variable="children-protection-level" first="0" step="1" last="0.1"/>
+    <steppedValueSet variable="adults-protection-level" first="0" step="1" last="0.1"/>
+    <steppedValueSet variable="seniors-protection-level" first="0" step="1" last="0.1"/>
+    <steppedValueSet variable="tourists-protection-level" first="0" step="1" last="0.1"/>
+    <steppedValueSet variable="children-prevention-level" first="0" step="1" last="0.1"/>
+    <steppedValueSet variable="adults-prevention-level" first="0" step="1" last="0.1"/>
+    <steppedValueSet variable="seniors-prevention-level" first="0" step="1" last="0.1"/>
+    <steppedValueSet variable="tourists-prevention-level" first="0" step="1" last="0.1"/>
+  </experiment>
+  <experiment name="ex_3" repetitions="10" runMetricsEveryStep="false">
+    <setup>setup</setup>
+    <go>go</go>
+    <timeLimit steps="366"/>
+    <metric>initial-number-children</metric>
+    <metric>bite-count</metric>
+    <steppedValueSet variable="initial-number-children" first="0" step="10" last="100"/>
+  </experiment>
+  <experiment name="stabalisation" repetitions="1000" runMetricsEveryStep="false">
+    <setup>setup</setup>
+    <go>go</go>
+    <timeLimit steps="366"/>
+    <metric>bite-count</metric>
   </experiment>
 </experiments>
 @#$#@#$#@
