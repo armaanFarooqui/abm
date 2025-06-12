@@ -1179,7 +1179,7 @@ SLIDER
 182
 children-awareness-level
 children-awareness-level
-0.1
+0.0
 1.0
 0.5
 0.1
@@ -1209,7 +1209,7 @@ SLIDER
 248
 seniors-awareness-level
 seniors-awareness-level
-0.1
+0.0
 1.0
 0.5
 0.1
