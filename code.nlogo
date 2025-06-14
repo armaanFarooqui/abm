@@ -4,6 +4,7 @@ __includes ["tick-bite-submodel.nls"] ;; Include external file with submodel log
 
 ;; Define agent breeds for residents and tourists by age group
 breed [children child]
+breed [students student]
 breed [adults adult]
 breed [seniors senior]
 breed [tourists-children tourist-child]
@@ -18,7 +19,6 @@ turtles-own [
   protection-level        ;; Level of protection against bites
   exposure-level          ;; Exposure to tick habitat
   awareness               ;; Awareness of tick risk
-  prevention-level        ;; Preventive behavior level
   age-group               ;; String label for age group
   original-color          ;; Stored to reset color
   arrival-tick            ;; Timestep when tourist arrived
@@ -170,10 +170,10 @@ to setup-environment
 
   ask patches [
     ;; Assign tick density and risk based on landuse code
-    if landuse = 20 [set pcolor red set tick-density 1.0 set patch-risk 0.32]; residential
-    if landuse = 60 [set pcolor green set tick-density 0.12 set patch-risk 0.50]; forest
-    if landuse = 61 [set pcolor blue set tick-density 0.03 set patch-risk 0.04]; dunes/ sand
-    if landuse = 62 [set pcolor grey set tick-density 0.00 set patch-risk 0.12]; other
+    if landuse = 20 [set pcolor red set tick-density 0.66 set patch-risk 0.32]; residential
+    if landuse = 60 [set pcolor green set tick-density 0.15 set patch-risk 0.50]; forest
+    if landuse = 61 [set pcolor blue set tick-density 0.10 set patch-risk 0.04]; dunes/ sand
+    if landuse = 62 [set pcolor grey set tick-density 0.08 set patch-risk 0.01]; other (offices)
   ]
 
   ;; Load municipality border
@@ -198,8 +198,18 @@ to setup-agents
     set risk-factor 0.24
     set protection-level ifelse-value use-fixed-protection [children-protection-level] [0.1 + random-float 0.9]
     set awareness ifelse-value use-fixed-awareness [children-awareness-level] [0.1 + random-float 0.9]
-    set prevention-level ifelse-value use-fixed-prevention [children-prevention-level] [0.1 + random-float 0.9]
     set age-group "child"
+  ]
+
+  ;; Create residents (school children)
+  create-students initial-number-students [
+    move-to one-of patches with [landuse = 20]
+    set color cyan set shape "person"
+    set original-color color
+    set risk-factor 0.24
+    set protection-level ifelse-value use-fixed-protection [children-protection-level] [0.1 + random-float 0.9]
+    set awareness ifelse-value use-fixed-awareness [children-awareness-level] [0.1 + random-float 0.9]
+    set age-group "student"
   ]
 
   ;; Create residents (adults)
@@ -210,7 +220,6 @@ to setup-agents
     set risk-factor 0.55
     set protection-level ifelse-value use-fixed-protection [adults-protection-level] [0.1 + random-float 0.9]
     set awareness ifelse-value use-fixed-awareness [adults-awareness-level] [0.1 + random-float 0.9]
-    set prevention-level ifelse-value use-fixed-prevention [adults-prevention-level] [0.1 + random-float 0.9]
     set age-group "adult"
   ]
 
@@ -222,7 +231,6 @@ to setup-agents
     set risk-factor 0.20
     set protection-level ifelse-value use-fixed-protection [seniors-protection-level] [0.1 + random-float 0.9]
     set awareness ifelse-value use-fixed-awareness [seniors-awareness-level] [0.1 + random-float 0.9]
-    set prevention-level ifelse-value use-fixed-prevention [seniors-prevention-level] [0.1 + random-float 0.9]
     set age-group "senior"
   ]
 
@@ -236,7 +244,6 @@ to setup-agents
     set risk-factor 0.24
     set protection-level ifelse-value use-fixed-protection [tourist-children-protection] [0.1 + random-float 0.9]
     set awareness ifelse-value use-fixed-awareness [tourist-children-awareness] [0.1 + random-float 0.9]
-    set prevention-level ifelse-value use-fixed-prevention [tourist-children-prevention] [0.1 + random-float 0.9]
     set age-group "tourist-child"
   ]
 
@@ -250,7 +257,6 @@ to setup-agents
     set risk-factor 0.50
     set protection-level ifelse-value use-fixed-protection [tourist-adults-protection] [0.1 + random-float 0.9]
     set awareness ifelse-value use-fixed-awareness [tourist-adults-awareness] [0.1 + random-float 0.9]
-    set prevention-level ifelse-value use-fixed-prevention [tourist-adults-prevention] [0.1 + random-float 0.9]
     set age-group "tourist-adult"
   ]
 
@@ -264,7 +270,6 @@ to setup-agents
     set risk-factor 0.20
     set protection-level ifelse-value use-fixed-protection [tourist-seniors-protection] [0.1 + random-float 0.9]
     set awareness ifelse-value use-fixed-awareness [tourist-seniors-awareness] [0.1 + random-float 0.9]
-    set prevention-level ifelse-value use-fixed-prevention [tourist-seniors-prevention] [0.1 + random-float 0.9]
     set age-group "tourist-senior"
   ]
 
@@ -404,29 +409,33 @@ end
 ; 4 = playing
 ; 5 = walking
 ; 6 = picnicking
-; 7 = others
+; 7 = others (work)
+; 8 = unknown
 
 ;; Assign activities to agents
 to assign-activities
 
   ;; Assign random activities to children and seniors
-  ask children [set activity one-of [1 2 3 4 5 6 7]]
-  ask seniors [set activity one-of [1 2 3 4 5 6 7]]
+  ask children [set activity one-of [1 2 3 4 5 6 7 8]]
+  ask seniors [set activity one-of [1 2 3 4 5 6 7 8]]
 
-  ;; Adults have fixed activity on weekdays, random on weekends
-  if ticks mod 7 != 6 and ticks mod 7 != 0 [
+  ;; Adults and students have fixed activity on weekdays
+  ;; Adults and students do random activities on weekends, vacation days
+  if (ticks < 199 or ticks > 218) and (ticks mod 7 != 6 and ticks mod 7 != 0) [
     ; Weekdays
-    ask adults [set activity 5]
+    ask adults [set activity 7]
+    ask students [set activity 7]
   ]
-  if ticks mod 7 = 6 or ticks mod 7 = 0 [
-    ; Weekends
-    ask adults [set activity one-of [1 2 3 4 5 6 7]]
+  if (ticks >= 199 and ticks <= 218) or (ticks mod 7 = 6 or ticks mod 7 = 0) [
+    ; Weekends and vacation
+    ask adults [set activity one-of [1 2 3 4 5 6 7 8]]
+    ask students [set activity one-of [1 2 3 4 5 6 7 8]]
   ]
 
   ;; Tourists always get random activities
-  ask tourists-children [set activity one-of [1 2 3 4 5 6 7]]
-  ask tourists-adults [set activity one-of [1 2 3 4 5 6 7]]
-  ask tourists-seniors [set activity one-of [1 2 3 4 5 6 7]]
+  ask tourists-children [set activity one-of [1 2 3 4 5 6 7 8]]
+  ask tourists-adults [set activity one-of [1 2 3 4 5 6 7 8]]
+  ask tourists-seniors [set activity one-of [1 2 3 4 5 6 7 8]]
 
 end
 
@@ -446,7 +455,9 @@ to move-turtles
     if (activity = 4 or activity = 6) [
       move-to one-of patches with [landuse = 60 or landuse = 61]
     ]
-    if (temperature > 25) [move-to one-of patches with [landuse = 20]]
+    if (activity = 8) [
+      move-to one-of patches with [landuse = 20 or landuse = 60 or landuse = 61 or landuse = 62]
+    ]
   ]
 end
 
@@ -458,7 +469,7 @@ end
 to count-bites
 
   ;; Count new bites per agent group
-  set new-bites-children count children with [bite-stat]
+  set new-bites-children (count children with [bite-stat]) + (count students with [bite-stat])
   set new-bites-adults count adults with [bite-stat]
   set new-bites-seniors count seniors with [bite-stat]
   set new-bites-tourists-children count tourists-children with [bite-stat]
@@ -856,10 +867,10 @@ new-bites
 11
 
 SLIDER
-13
-371
-187
-404
+92
+575
+266
+608
 children-protection-level
 children-protection-level
 0
@@ -871,10 +882,10 @@ NIL
 HORIZONTAL
 
 SLIDER
-13
-404
-188
-437
+267
+575
+442
+608
 adults-protection-level
 adults-protection-level
 0
@@ -886,115 +897,55 @@ NIL
 HORIZONTAL
 
 SLIDER
+442
+575
+618
+608
+seniors-protection-level
+seniors-protection-level
+0
+1
+0.5
+0.1
+1
+NIL
+HORIZONTAL
+
+SLIDER
+92
+609
+267
+642
+tourist-children-protection
+tourist-children-protection
+0
+1
+0.5
+0.1
+1
+NIL
+HORIZONTAL
+
+SLIDER
 13
-438
-189
-471
-seniors-protection-level
-seniors-protection-level
-0
-1
-0.5
-0.1
-1
-NIL
-HORIZONTAL
-
-SLIDER
-12
-472
-190
-505
-tourist-children-protection
-tourist-children-protection
-0
-1
-0.5
-0.1
-1
-NIL
-HORIZONTAL
-
-SLIDER
-210
-456
-434
-489
-children-prevention-level
-children-prevention-level
-0
-1
-0.5
-0.1
-1
-NIL
-HORIZONTAL
-
-SLIDER
-434
-456
-647
-489
-adults-prevention-level
-adults-prevention-level
-0
-1
-0.5
-0.1
-1
-NIL
-HORIZONTAL
-
-SLIDER
-210
-490
-434
-523
-seniors-prevention-level
-seniors-prevention-level
-0
-1
-0.5
-0.1
-1
-NIL
-HORIZONTAL
-
-SLIDER
-434
-490
-646
-523
-tourist-children-prevention
-tourist-children-prevention
-0
-1
-0.5
-0.1
-1
-NIL
-HORIZONTAL
-
-SLIDER
-12
-116
-183
-149
+485
+168
+518
 stay-duration
 stay-duration
 1
 30
-29.0
+30.0
 1
 1
 NIL
 HORIZONTAL
 
 PLOT
-15
-728
-335
-944
+19
+812
+339
+1028
 Total Bites
 Time
 Tick Bites
@@ -1009,10 +960,10 @@ PENS
 "Total Bites" 1.0 0 -16777216 true "" "plot bite-count"
 
 PLOT
-336
-728
-648
-944
+340
+812
+652
+1028
 New Bites
 Time
 Tick Bites
@@ -1027,10 +978,10 @@ PENS
 "New Bites" 1.0 0 -16777216 true "" "plot new-bites"
 
 PLOT
-15
-1376
-336
-1589
+19
+1460
+340
+1673
 Total Bites (By Group)
 Time
 Tick Bites
@@ -1050,10 +1001,10 @@ PENS
 "Tourist Seniors" 1.0 0 -4079321 true "" "plotxy ticks total-bites-tourists-seniors"
 
 PLOT
-336
-1376
-648
-1589
+340
+1460
+652
+1673
 New Bites (By Group)
 Time
 Tick Bites
@@ -1073,12 +1024,27 @@ PENS
 "Tourist Seniors" 1.0 0 -4079321 true "" "plotxy ticks new-bites-tourists-seniors"
 
 SLIDER
-14
-589
-230
-622
+12
+246
+166
+279
 initial-number-children
 initial-number-children
+0
+100
+15.0
+5
+1
+NIL
+HORIZONTAL
+
+SLIDER
+12
+311
+166
+344
+initial-number-adults
+initial-number-adults
 0
 100
 30.0
@@ -1088,25 +1054,10 @@ NIL
 HORIZONTAL
 
 SLIDER
-231
-589
-439
-622
-initial-number-adults
-initial-number-adults
-0
-100
-60.0
-10
-1
-NIL
-HORIZONTAL
-
-SLIDER
-439
-589
-648
-622
+12
+346
+167
+379
 initial-number-seniors
 initial-number-seniors
 0
@@ -1118,10 +1069,10 @@ NIL
 HORIZONTAL
 
 SWITCH
-15
-655
-231
-688
+13
+114
+163
+147
 show-tick-density
 show-tick-density
 1
@@ -1129,10 +1080,10 @@ show-tick-density
 -1000
 
 SWITCH
-231
-655
-439
-688
+13
+147
+163
+180
 show-patch-risk
 show-patch-risk
 1
@@ -1140,10 +1091,10 @@ show-patch-risk
 -1000
 
 SWITCH
-440
-656
-648
-689
+13
+179
+163
+212
 show-bite-heatmap
 show-bite-heatmap
 1
@@ -1151,32 +1102,21 @@ show-bite-heatmap
 -1000
 
 SWITCH
-15
-689
-231
-722
+267
+542
+417
+575
 use-fixed-protection
 use-fixed-protection
-1
-1
--1000
-
-SWITCH
-232
-689
-439
-722
-use-fixed-prevention
-use-fixed-prevention
 1
 1
 -1000
 
 SLIDER
-13
-149
-183
-182
+88
+713
+267
+746
 children-awareness-level
 children-awareness-level
 0.0
@@ -1188,10 +1128,10 @@ NIL
 HORIZONTAL
 
 SLIDER
-13
-182
-184
-215
+267
+713
+445
+746
 adults-awareness-level
 adults-awareness-level
 0.0
@@ -1203,10 +1143,10 @@ NIL
 HORIZONTAL
 
 SLIDER
-13
-215
-184
-248
+445
+713
+624
+746
 seniors-awareness-level
 seniors-awareness-level
 0.0
@@ -1218,10 +1158,10 @@ NIL
 HORIZONTAL
 
 SWITCH
-440
-689
-648
-722
+267
+681
+444
+714
 use-fixed-awareness
 use-fixed-awareness
 1
@@ -1229,10 +1169,10 @@ use-fixed-awareness
 -1000
 
 SLIDER
-14
-622
-230
-655
+12
+381
+167
+414
 tourists-children-number
 tourists-children-number
 0
@@ -1244,10 +1184,10 @@ NIL
 HORIZONTAL
 
 SLIDER
-230
-623
-440
-656
+13
+416
+168
+449
 tourists-adults-number
 tourists-adults-number
 0
@@ -1259,10 +1199,10 @@ NIL
 HORIZONTAL
 
 SLIDER
-440
-623
-648
-656
+13
+450
+168
+483
 tourists-seniors-number
 tourists-seniors-number
 0
@@ -1274,10 +1214,10 @@ NIL
 HORIZONTAL
 
 PLOT
-15
-945
-335
-1159
+19
+1029
+339
+1243
 Total Bites (Aggregated Groups)
 Time
 Tick Bites
@@ -1293,10 +1233,10 @@ PENS
 "Tourists" 1.0 0 -14730904 true "" "plotxy ticks total-tourists-bites"
 
 PLOT
-336
-944
-648
-1160
+340
+1028
+652
+1244
 New Bites (Aggregated Groups)
 Time
 Tick Bites
@@ -1312,10 +1252,10 @@ PENS
 "Tourists" 1.0 0 -14730904 true "" "plotxy ticks new-tourists-bites"
 
 PLOT
-15
-1160
-334
-1375
+19
+1244
+338
+1459
 Total Bites (Census Populations)
 Time
 Tick Bites
@@ -1332,10 +1272,10 @@ PENS
 "Seniors" 1.0 0 -14730904 true "" "plotxy ticks total-seniors-population-bites"
 
 PLOT
-336
-1160
-648
-1376
+340
+1244
+652
+1460
 New Bites (Census Populations)
 Time
 Tick Bites
@@ -1352,10 +1292,10 @@ PENS
 "Seniors" 1.0 0 -14730904 true "" "plotxy ticks new-seniors-population-bites"
 
 SLIDER
-13
-249
-185
-282
+88
+745
+268
+778
 tourist-children-awareness
 tourist-children-awareness
 0
@@ -1367,10 +1307,10 @@ NIL
 HORIZONTAL
 
 SLIDER
-12
-282
-185
-315
+267
+745
+445
+778
 tourist-adults-awareness
 tourist-adults-awareness
 0
@@ -1382,10 +1322,10 @@ NIL
 HORIZONTAL
 
 SLIDER
-12
-314
-185
-347
+445
+745
+625
+778
 tourist-seniors-awareness
 tourist-seniors-awareness
 0
@@ -1397,10 +1337,10 @@ NIL
 HORIZONTAL
 
 SLIDER
-12
-505
-190
-538
+267
+609
+443
+642
 tourist-adults-protection
 tourist-adults-protection
 0
@@ -1412,46 +1352,31 @@ NIL
 HORIZONTAL
 
 SLIDER
+442
+609
+618
+642
+tourist-seniors-protection
+tourist-seniors-protection
+0
+1
+0.5
+0.1
+1
+NIL
+HORIZONTAL
+
+SLIDER
 12
-538
-191
-571
-tourist-seniors-protection
-tourist-seniors-protection
+279
+166
+312
+initial-number-students
+initial-number-students
 0
-1
-0.5
-0.1
-1
-NIL
-HORIZONTAL
-
-SLIDER
-210
-524
-435
-557
-tourist-adults-prevention
-tourist-adults-prevention
-0
-1.0
-0.5
-0.1
-1
-NIL
-HORIZONTAL
-
-SLIDER
-434
-524
-647
-557
-tourist-seniors-prevention
-tourist-seniors-prevention
-0
-1.0
-0.5
-0.1
+100
+15.0
+5
 1
 NIL
 HORIZONTAL

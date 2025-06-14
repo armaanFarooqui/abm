@@ -12,7 +12,9 @@ to evaluate-tick-bite-risk [temp]
     if activity = 4 [ set exposure-level 0.13 ]
     if activity = 5 [ set exposure-level 0.36 ]
     if activity = 6 [ set exposure-level 0.02 ]
-    if activity = 7 [ set exposure-level 0.26 ]
+    if activity = 7 [ set exposure-level 0.07 ]
+    if activity = 8 [ set exposure-level 0.18 ]
+
 
     ;; Get month-risk value
     let month tick-to-month
@@ -32,13 +34,17 @@ to evaluate-tick-bite-risk [temp]
 
     ;; Calculate bite-risk with correct logic
     ;; Weighted risk calculation
-    let weighted-risk-enhancers (
-  (risk-factor     * 0.25) +
-  (tick-density    * 0.03) +
-  (patch-risk      * 0.06) +
-  (exposure-level  * 0.12) +
-  (month-risk      * 0.50)
+    let patch-risk-adjusted patch-risk
+    if activity = 8 [ set patch-risk-adjusted 0.08 ]
+
+let weighted-risk-enhancers (
+  (risk-factor           * 0.03) +
+  (tick-density          * 0.50) +
+  (patch-risk-adjusted   * 0.12) +
+  (exposure-level        * 0.25) +
+  (month-risk            * 0.06)
 )
+
 
 let weighted-risk-reducers (
   ((1 - protection-level) * 0.50) +
