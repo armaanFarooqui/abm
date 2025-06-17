@@ -172,7 +172,7 @@ to setup-environment
     ;; Assign tick density and risk based on landuse code
     if landuse = 20 [set pcolor red set tick-density 0.66 set patch-risk 0.32]; residential
     if landuse = 60 [set pcolor green set tick-density 0.15 set patch-risk 0.50]; forest
-    if landuse = 61 [set pcolor blue set tick-density 0.10 set patch-risk 0.04]; dunes/ sand
+    if landuse = 61 [set pcolor brown set tick-density 0.10 set patch-risk 0.04]; dunes/ sand
     if landuse = 62 [set pcolor grey set tick-density 0.08 set patch-risk 0.01]; other (offices)
   ]
 
@@ -226,7 +226,7 @@ to setup-agents
   ;; Create residents (seniors)
   create-seniors initial-number-seniors [
     move-to one-of patches with [landuse = 20]
-    set color gray set shape "person"
+    set color white set shape "person"
     set original-color color
     set risk-factor 0.20
     set protection-level ifelse-value use-fixed-protection [seniors-protection-level] [0.1 + random-float 0.9]
@@ -279,12 +279,6 @@ to go
 ;; End the simulation when the weather file ends, execute these tasks along with it
 if ticks >= length weather-list [
     export-results
-    export-bite-count-csv
-    export-new-count-csv
-    export-total-agg
-    export-new-agg
-    export-total-census
-    export-new-census
     export-total-group
     export-new-group
     stop ]
@@ -410,14 +404,14 @@ end
 ; 5 = walking
 ; 6 = picnicking
 ; 7 = others (work)
-; 8 = unknown
+
 
 ;; Assign activities to agents
 to assign-activities
 
   ;; Assign random activities to children and seniors
-  ask children [set activity one-of [1 2 3 4 5 6 7 8]]
-  ask seniors [set activity one-of [1 2 3 4 5 6 7 8]]
+  ask children [set activity one-of [1 2 3 4 5 6 7 ]]
+  ask seniors [set activity one-of [1 2 3 4 5 6 7 ]]
 
   ;; Adults and students have fixed activity on weekdays
   ;; Adults and students do random activities on weekends, vacation days
@@ -428,14 +422,14 @@ to assign-activities
   ]
   if (ticks >= 199 and ticks <= 218) or (ticks mod 7 = 6 or ticks mod 7 = 0) [
     ; Weekends and vacation
-    ask adults [set activity one-of [1 2 3 4 5 6 7 8]]
-    ask students [set activity one-of [1 2 3 4 5 6 7 8]]
+    ask adults [set activity one-of [1 2 3 4 5 6 7 ]]
+    ask students [set activity one-of [1 2 3 4 5 6 7 ]]
   ]
 
   ;; Tourists always get random activities
-  ask tourists-children [set activity one-of [1 2 3 4 5 6 7 8]]
-  ask tourists-adults [set activity one-of [1 2 3 4 5 6 7 8]]
-  ask tourists-seniors [set activity one-of [1 2 3 4 5 6 7 8]]
+  ask tourists-children [set activity one-of [1 2 3 4 5 6 7 ]]
+  ask tourists-adults [set activity one-of [1 2 3 4 5 6 7 ]]
+  ask tourists-seniors [set activity one-of [1 2 3 4 5 6 7 ]]
 
 end
 
@@ -455,9 +449,7 @@ to move-turtles
     if (activity = 4 or activity = 6) [
       move-to one-of patches with [landuse = 60 or landuse = 61]
     ]
-    if (activity = 8) [
-      move-to one-of patches with [landuse = 20 or landuse = 60 or landuse = 61 or landuse = 62]
-    ]
+
   ]
 end
 
@@ -570,7 +562,7 @@ to update-visualization
         ask patches [
           if landuse = 20 [ set pcolor red ]
           if landuse = 60 [ set pcolor green ]
-          if landuse = 61 [ set pcolor blue ]
+          if landuse = 61 [ set pcolor brown ]
           if landuse = 62 [ set pcolor gray ]
         ]
       ]
@@ -580,7 +572,7 @@ to update-visualization
   ;; Update turtle color based on whether they have been bitten
   ask turtles [
     if bite-stat [
-      set color black
+      set color pink
     ]
     if not bite-stat [
       set color original-color
@@ -596,6 +588,18 @@ to draw-legend
     set plabel ""
   ]
 
+  ask patches with [pxcor > (max-pxcor - 30) and pycor < (min-pycor + 5)] [
+    set pcolor black
+    set plabel ""
+  ]
+
+  ;; agents index
+show-legend-entry (min-pxcor ) (min-pycor + 4) "Children" cyan
+show-legend-entry (min-pxcor) (min-pycor + 3) "Adults" blue
+show-legend-entry (min-pxcor) (min-pycor + 2) "Seniors" white
+show-legend-entry (min-pxcor) (min-pycor + 1) "Tourists" yellow
+
+
   ;; Show legend depending on which layer is being visualized
   if show-tick-density [
     let y min-pycor
@@ -609,19 +613,22 @@ to draw-legend
     show-legend-entry (max-pxcor - 6) (min-pycor + 3) "Low Risk" 14
     show-legend-entry (max-pxcor - 6) (min-pycor + 2) "Medium Risk" 12
     show-legend-entry (max-pxcor - 6) (min-pycor + 1) "High Risk" black
+
   ]
 
   if show-bite-heatmap [
     show-legend-entry (max-pxcor - 6) (min-pycor + 3) "Low Risk" white
     show-legend-entry (max-pxcor - 6) (min-pycor + 2) "Medium Risk" 14
     show-legend-entry (max-pxcor - 6) (min-pycor + 1) "High Risk" black
+
   ]
 
   if not show-tick-density and not show-patch-risk and not show-bite-heatmap [
   show-legend-entry (max-pxcor - 6) (min-pycor + 4) "Residential" red
   show-legend-entry (max-pxcor - 6) (min-pycor + 3) "Forest" green
-  show-legend-entry (max-pxcor - 6) (min-pycor + 2) "Dunes/Sand" blue
+  show-legend-entry (max-pxcor - 6) (min-pycor + 2) "Dunes/Sand" brown
   show-legend-entry (max-pxcor - 6) (min-pycor + 1) "Other" gray
+
   ]
 end
 
@@ -648,103 +655,13 @@ end
 to draw-map-title
   ask patch (max-pxcor / 6) max-pycor [ set plabel "Ede, The Netherlands" ]
   ask patch (max-pxcor / 6) (max-pycor - 2) [ set plabel "Tick Bite Risk Simulation" ]
-  ask patch min-pxcor max-pycor [ set plabel "N" ]
-end
-
-;; Export bite counts per tick to CSV
-to export-bite-count-csv
-  file-open "data/outputs/csv/bite_count.csv"
-  file-print "tick,bite-count"
-  foreach bite-count-history [
-    row -> file-print (word item 0 row "," item 1 row)
-  ]
-  file-close
-end
-
-;; Export new bite counts per tick to CSV
-to export-new-count-csv
-  file-open "data/outputs/csv/new_count.csv"
-  file-print "tick,new-count"
-  foreach new-count-history [
-    row -> file-print (word item 0 row "," item 1 row)
-  ]
-  file-close
-end
-
-;; Export total bite counts for residents and tourists to CSV
-to export-total-agg
-  file-open "data/outputs/csv/total_agg.csv"
-  file-print "tick,total-residents-bites,total-tourists-bites"
-
-  let n length total-residents-history
-  (foreach n-values n [ i -> i ] [
-    i ->
-    let tick-value item 0 (item i total-residents-history)
-    let residents-bite item 1 (item i total-residents-history)
-    let tourists-bite item 1 (item i total-tourists-history)
-    file-print (word tick-value "," residents-bite "," tourists-bite)
-  ])
-
-  file-close
-end
-
-;; Export new bite counts for residents and tourists to CSV
-to export-new-agg
-  file-open "data/outputs/csv/new_agg.csv"
-  file-print "tick,new-residents-bites,new-tourists-bites"
-
-  let n length new-residents-history
-  (foreach n-values n [ i -> i ] [
-    i ->
-    let tick-value item 0 (item i new-residents-history)
-    let residents-bite item 1 (item i new-residents-history)
-    let tourists-bite item 1 (item i new-tourists-history)
-    file-print (word tick-value "," residents-bite "," tourists-bite)
-  ])
-
-  file-close
-end
-
-;; Export total bite counts by age group to CSV
-to export-total-census
-  file-open "data/outputs/csv/total_census.csv"
-  file-print "tick,total-children-bites,total-adults-bites,total-seniors-bites"
-
-  let n length total-children-population-history
-  (foreach n-values n [ i -> i ] [
-    i ->
-    let tick-value item 0 (item i total-children-population-history)
-    let children-bite item 1 (item i total-children-population-history)
-    let adults-bite item 1 (item i total-adults-population-history)
-    let seniors-bite item 1 (item i total-seniors-population-history)
-    file-print (word tick-value "," children-bite "," adults-bite "," seniors-bite)
-  ])
-
-  file-close
-end
-
-;; Export new bite counts by age group to CSV
-to export-new-census
-  file-open "data/outputs/csv/new_census.csv"
-  file-print "tick,new-children-bites,new-adults-bites,new-seniors-bites"
-
-  let n length new-children-population-history
-  (foreach n-values n [ i -> i ] [
-    i ->
-    let tick-value item 0 (item i new-children-population-history)
-    let children-bite item 1 (item i new-children-population-history)
-    let adults-bite item 1 (item i new-adults-population-history)
-    let seniors-bite item 1 (item i new-seniors-population-history)
-    file-print (word tick-value "," children-bite "," adults-bite "," seniors-bite)
-  ])
-
-  file-close
+  ask patch max-pxcor max-pycor [ set plabel "N" ]
 end
 
 ;; Export total bite counts by group and age (residents and tourists) to CSV
 to export-total-group
   file-open "data/outputs/csv/total_group.csv"
-  file-print "tick,total-children-bites,total-adults-bites,total-seniors-bites,total-tourists-children-bites,total-tourists-adults-bites,total-tourists-seniors-bites"
+  file-print "time-step,total-children-bites,total-adults-bites,total-seniors-bites,total-tourists-children-bites,total-tourists-adults-bites,total-tourists-seniors-bites"
 
   let n length total-children-group-history
   (foreach n-values n [ i -> i ] [
@@ -765,7 +682,7 @@ end
 ;; Export new bite counts by group and age (residents and tourists) to CSV
 to export-new-group
   file-open "data/outputs/csv/new_group.csv"
-  file-print "tick,new-children-bites,new-adults-bites,new-seniors-bites,new-tourists-children-bites,new-tourists-adults-bites,new-tourists-seniors-bites"
+  file-print "time-step,new-children-bites,new-adults-bites,new-seniors-bites,new-tourists-children-bites,new-tourists-adults-bites,new-tourists-seniors-bites"
 
   let n length new-children-group-history
   (foreach n-values n [ i -> i ] [
@@ -1075,7 +992,7 @@ SWITCH
 147
 show-tick-density
 show-tick-density
-1
+0
 1
 -1000
 

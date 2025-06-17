@@ -29,30 +29,31 @@ seniors = 20.16 = 0.20
 
  
 
-Dog walking           1.417257 = 0.01
-Gardening            17.051748 = 0.17
-Green maintenance     2.646936 = 0.02
-Playing              13.547311 = 0.13
-Walking              36.887394 = 0.36
-Picnicking            2.042518 = 0.02
-Other                 7.991425 = 0.07
+Dog walking           1.417257 = 0.01 = 0.01
+Gardening            17.051748 = 0.17 = 0.21
+Green maintenance     2.646936 = 0.02 = 0.02
+Playing              13.547311 = 0.13 = 0.16
+Walking              36.887394 = 0.36 = 0.46
+Picnicking            2.042518 = 0.02 = 0.02
+Other                 7.991425 = 0.07 = 0.08
+
 Unknown              18.415411 = 0.18
 
 
-residential = 32.64 = 0.32
+residential = 32.64 = 0.32 = 0.35
 Garden        30.402549
 Urban Park     2.242006
 
-forest = 53.44 = 0.53
+forest = 53.44 = 0.53 = 0.58
 Forest        47.915798
 Pasture        3.132257
 Heather        1.750729
 Wetlands       0.646103
 
-dunes/sand = 4.46 = 0.04
+dunes/sand = 4.46 = 0.04 = 0.04
 Dunes          4.466147
 
-other = 1.26 = 0.01
+other = 1.26 = 0.01 = 0.01 
 Other          1.265408
 
 unknown = 8.17 = 0.08
