@@ -13,7 +13,7 @@ to evaluate-tick-bite-risk [temp]
     if activity = 5 [ set exposure-level 0.46 ] ;; walking
     if activity = 6 [ set exposure-level 0.02 ] ;; picknicking
     if activity = 7 [ set exposure-level 0.08 ] ;; work
-    if activity = 8 [ set exposure-level 0.00 ] ;; unknown
+    if activity = 8 [ set exposure-level 0.00 ] ;; indoors
 
 
     ;; Get month-risk value

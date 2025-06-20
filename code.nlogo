@@ -404,43 +404,82 @@ end
 ; 5 = walking
 ; 6 = picnicking
 ; 7 = others (work)
+; 8 = indoors
 
-
-;; Assign activities to agents
 to assign-activities
+  ;; Define flags
+  let is-weekday (ticks mod 7 != 6 and ticks mod 7 != 0)
+  let is-weekend (ticks mod 7 = 6 or ticks mod 7 = 0)
+  let is-student-vacation (
+    (ticks >= 300 and ticks <= 307) or ; 26 Oct – 3 Nov
+    (ticks >= 356 or ticks <= 5) or  ; 21 Dec – 5 Jan
+    (ticks >= 53 and ticks <= 61) or ; 22 Feb – 2 Mar
+    (ticks >= 117 and ticks <= 125) or ; 26 Apr – 4 May
+    (ticks >= 200 and ticks <= 243) ; 19 Jul – 31 Aug
+  )
+  let is-adult-vacation (ticks >= 200 and ticks <= 219) ; 19 Jul - 7 Aug
+  let is-hot-or-rainy (temperature >= 25 or precipitation >= 5)
 
-  ;; Assign random activities to children and seniors
-  ask children [set activity one-of [1 2 3 4 5 6 7 ]]
-  ask seniors [set activity one-of [1 2 3 4 5 6 7 ]]
+  ;; Adults
+  (ifelse
+    is-weekday and not is-adult-vacation [
+      ask adults [ set activity 7 ]
+    ]
+    is-hot-or-rainy [
+      ask adults [ set activity 8 ]
+    ]
+    [ ask adults [ set activity one-of [1 2 3 4 5 6 7 8] ] ]
+  )
 
-  ;; Adults and students have fixed activity on weekdays
-  ;; Adults and students do random activities on weekends, vacation days
-  if (ticks < 199 or ticks > 218) and (ticks mod 7 != 6 and ticks mod 7 != 0) [
-    ; Weekdays
-    ask adults [set activity 7]
-    ask students [set activity 7]
-  ]
-  if (ticks >= 199 and ticks <= 218) or (ticks mod 7 = 6 or ticks mod 7 = 0) [
-    ; Weekends and vacation
-    ask adults [set activity one-of [1 2 3 4 5 6 7 ]]
-    ask students [set activity one-of [1 2 3 4 5 6 7 ]]
-  ]
+  ;; Students
+  (ifelse
+    is-weekday and not is-student-vacation [
+      ask students [ set activity 7 ]
+    ]
+    is-hot-or-rainy [
+      ask students [ set activity 8 ]
+    ]
+    [ ask students [ set activity one-of [1 2 3 4 5 6 7 8] ] ]
+  )
 
-  ;; Tourists always get random activities
-  ask tourists-children [set activity one-of [1 2 3 4 5 6 7 ]]
-  ask tourists-adults [set activity one-of [1 2 3 4 5 6 7 ]]
-  ask tourists-seniors [set activity one-of [1 2 3 4 5 6 7 ]]
+  ;; Children
+  (ifelse
+    is-hot-or-rainy [
+      ask children [ set activity 8 ]
+    ]
+    [ ask children [ set activity one-of [1 2 3 4 5 6 7 8] ] ]
+  )
 
+  ;; Seniors
+  (ifelse
+    is-hot-or-rainy [
+      ask seniors [ set activity 8 ]
+    ]
+    [ ask seniors [ set activity one-of [1 2 3 4 5 6 7 8] ] ]
+  )
+
+  ;; Tourists
+  (ifelse
+    is-hot-or-rainy [
+      ask tourists-children [ set activity 8 ]
+      ask tourists-adults [ set activity 8 ]
+      ask tourists-seniors [ set activity 8 ]
+    ]
+    [
+      ask tourists-children [ set activity one-of [1 2 3 4 5 6 7 8] ]
+      ask tourists-adults [ set activity one-of [1 2 3 4 5 6 7 8] ]
+      ask tourists-seniors [ set activity one-of [1 2 3 4 5 6 7 8] ]
+    ]
+  )
 end
+
+
 
 ;; Move agents to land-use patches based on activity and weather
 to move-turtles
   ask turtles [
-    if (temperature > 25 or precipitation > 50) [
-      move-to one-of patches with [landuse = 20] ;; Prefer residential during bad weather
 
-    ]
-    if (activity = 1 or activity = 2 or activity = 3 or activity = 5) [
+    if (activity = 1 or activity = 2 or activity = 3 or activity = 5 or activity = 8) [
       move-to one-of patches with [landuse = 20]
     ]
     if (activity = 7) [
@@ -899,7 +938,7 @@ PLOT
 1460
 340
 1673
-Total Bites (By Group)
+Total Bites (Separated) - Per Capita
 Time
 Tick Bites
 0.0
@@ -910,35 +949,35 @@ true
 true
 "" ""
 PENS
-"Children" 1.0 0 -8053223 true "" "plotxy ticks total-bites-children"
-"Adults" 1.0 0 -13210332 true "" "plotxy ticks total-bites-adults"
-"Seniors" 1.0 0 -14730904 true "" "plotxy ticks total-bites-seniors"
-"Tourist Children" 1.0 0 -11053225 true "" "plotxy ticks total-bites-tourists-children"
-"Tourist Adults" 1.0 0 -10402772 true "" "plotxy ticks total-bites-tourists-adults"
-"Tourist Seniors" 1.0 0 -4079321 true "" "plotxy ticks total-bites-tourists-seniors"
+"Children" 1.0 0 -8053223 true "" "plotxy ticks (total-bites-children / (initial-number-children))"
+"Adults" 1.0 0 -13210332 true "" "plotxy ticks (total-bites-adults / (initial-number-adults))"
+"Seniors" 1.0 0 -14730904 true "" "plotxy ticks (total-bites-seniors / (initial-number-seniors))"
+"Tourist Children" 1.0 0 -11053225 true "" "plotxy ticks (total-bites-tourists-children / (tourists-children-number))"
+"Tourist Adults" 1.0 0 -10402772 true "" "plotxy ticks (total-bites-tourists-adults / (tourists-adults-number))"
+"Tourist Seniors" 1.0 0 -4079321 true "" "plotxy ticks (total-bites-tourists-seniors / (tourists-seniors-number))"
 
 PLOT
 340
 1460
 652
 1673
-New Bites (By Group)
+New Bites (Separated) - Per Capita
 Time
 Tick Bites
 0.0
 10.0
 0.0
-10.0
+0.5
 true
 true
 "" ""
 PENS
-"Children" 1.0 0 -8053223 true "" "plotxy ticks new-bites-children"
-"Adults" 1.0 0 -13210332 true "" "plotxy ticks new-bites-adults"
-"Seniors" 1.0 0 -14730904 true "" "plotxy ticks new-bites-seniors"
-"Tourist Children" 1.0 0 -11053225 true "" "plotxy ticks new-bites-tourists-children"
-"Tourist Adults" 1.0 0 -10402772 true "" "plotxy ticks new-bites-tourists-adults"
-"Tourist Seniors" 1.0 0 -4079321 true "" "plotxy ticks new-bites-tourists-seniors"
+"Children" 1.0 0 -8053223 true "" "plotxy ticks (new-bites-children / (initial-number-children))"
+"Adults" 1.0 0 -13210332 true "" "plotxy ticks (new-bites-adults / (initial-number-adults))"
+"Seniors" 1.0 0 -14730904 true "" "plotxy ticks (new-bites-seniors / (initial-number-seniors))"
+"Tourist Children" 1.0 0 -11053225 true "" "plotxy ticks (new-bites-tourists-children / (tourists-children-number))"
+"Tourist Adults" 1.0 0 -10402772 true "" "plotxy ticks (new-bites-tourists-adults / (tourists-adults-number))"
+"Tourist Seniors" 1.0 0 -4079321 true "" "plotxy ticks (new-bites-tourists-seniors / (tourists-seniors-number))"
 
 SLIDER
 12
@@ -949,7 +988,7 @@ initial-number-children
 initial-number-children
 0
 100
-15.0
+10.0
 5
 1
 NIL
@@ -964,7 +1003,7 @@ initial-number-adults
 initial-number-adults
 0
 100
-30.0
+60.0
 10
 1
 NIL
@@ -979,7 +1018,7 @@ initial-number-seniors
 initial-number-seniors
 0
 100
-30.0
+20.0
 10
 1
 NIL
@@ -992,7 +1031,7 @@ SWITCH
 147
 show-tick-density
 show-tick-density
-0
+1
 1
 -1000
 
@@ -1093,9 +1132,9 @@ SLIDER
 tourists-children-number
 tourists-children-number
 0
-100
-20.0
-10
+200
+55.0
+5
 1
 NIL
 HORIZONTAL
@@ -1108,9 +1147,9 @@ SLIDER
 tourists-adults-number
 tourists-adults-number
 0
-100
-20.0
-10
+200
+160.0
+5
 1
 NIL
 HORIZONTAL
@@ -1123,9 +1162,9 @@ SLIDER
 tourists-seniors-number
 tourists-seniors-number
 0
-100
-20.0
-10
+200
+55.0
+5
 1
 NIL
 HORIZONTAL
@@ -1135,7 +1174,7 @@ PLOT
 1029
 339
 1243
-Total Bites (Aggregated Groups)
+Total Bites (Overall) - Per Capita
 Time
 Tick Bites
 0.0
@@ -1146,34 +1185,34 @@ true
 true
 "" ""
 PENS
-"Residents" 1.0 0 -8053223 true "" "plotxy ticks total-residents-bites"
-"Tourists" 1.0 0 -14730904 true "" "plotxy ticks total-tourists-bites"
+"Residents" 1.0 0 -8053223 true "" "plotxy ticks (total-residents-bites / (initial-number-students + initial-number-children + initial-number-adults + initial-number-seniors))"
+"Tourists" 1.0 0 -14730904 true "" "plotxy ticks (total-tourists-bites / (tourists-children-number + tourists-adults-number + tourists-seniors-number))"
 
 PLOT
 340
 1028
 652
 1244
-New Bites (Aggregated Groups)
+New Bites (Overall) - Per Capita
 Time
 Tick Bites
 0.0
-10.0
+365.0
 0.0
-10.0
+0.3
 true
 true
 "" ""
 PENS
-"Residents" 1.0 0 -8053223 true "" "plotxy ticks new-residents-bites"
-"Tourists" 1.0 0 -14730904 true "" "plotxy ticks new-tourists-bites"
+"Residents" 1.0 0 -8053223 true "" "plotxy ticks (new-residents-bites / (initial-number-students + initial-number-children + initial-number-adults + initial-number-seniors))"
+"Tourists" 1.0 0 -14730904 true "" "plotxy ticks (new-tourists-bites / (tourists-children-number + tourists-adults-number + tourists-seniors-number))"
 
 PLOT
 19
 1244
 338
 1459
-Total Bites (Census Populations)
+Total Bites (Grouped) - Per Capita
 Time
 Tick Bites
 0.0
@@ -1184,29 +1223,29 @@ true
 true
 "" ""
 PENS
-"Children" 1.0 0 -8053223 true "" "plotxy ticks total-children-population-bites"
-"Adults" 1.0 0 -13210332 true "" "plotxy ticks total-adults-population-bites"
-"Seniors" 1.0 0 -14730904 true "" "plotxy ticks total-seniors-population-bites"
+"Children" 1.0 0 -8053223 true "" "plotxy ticks (total-children-population-bites /(initial-number-children + initial-number-students + tourists-children-number))"
+"Adults" 1.0 0 -13210332 true "" "plotxy ticks (total-adults-population-bites / (initial-number-adults + tourists-adults-number))"
+"Seniors" 1.0 0 -14730904 true "" "plotxy ticks (total-seniors-population-bites / (initial-number-seniors + tourists-seniors-number))"
 
 PLOT
 340
 1244
 652
 1460
-New Bites (Census Populations)
+New Bites (Grouped) - Per Capita
 Time
 Tick Bites
 0.0
-10.0
+365.0
 0.0
-10.0
+0.3
 true
 true
 "" ""
 PENS
-"Children" 1.0 0 -8053223 true "" "plotxy ticks new-children-population-bites"
-"Adults" 1.0 0 -13210332 true "" "plotxy ticks new-adults-population-bites"
-"Seniors" 1.0 0 -14730904 true "" "plotxy ticks new-seniors-population-bites"
+"Children" 1.0 0 -8053223 true "" "plotxy ticks (new-children-population-bites / (initial-number-students + initial-number-children + tourists-children-number))"
+"Adults" 1.0 0 -13210332 true "" "plotxy ticks (new-adults-population-bites / (initial-number-adults + tourists-adults-number))"
+"Seniors" 1.0 0 -14730904 true "" "plotxy ticks (new-seniors-population-bites /(initial-number-seniors + tourists-seniors-number))"
 
 SLIDER
 88
@@ -1292,7 +1331,7 @@ initial-number-students
 initial-number-students
 0
 100
-15.0
+10.0
 5
 1
 NIL
