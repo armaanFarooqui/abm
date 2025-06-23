@@ -31,11 +31,11 @@ to evaluate-tick-bite-risk [temp]
 
     ;; ✅ Use local-tick-density instead of global tick-density
     let weighted-risk-enhancers (
-      (risk-factor     * 0.03) +
-      (local-tick-density * 0.50) +
-      (patch-risk      * 0.12) +
-      (exposure-level  * 0.25) +
-      (month-risk      * 0.06)
+      (risk-factor     * 0.06) +
+      (local-tick-density * 0.03) +
+      (patch-risk      * 0.25) +
+      (exposure-level  * 0.50) +
+      (month-risk      * 0.12)
     )
 
     let weighted-risk-reducers (
