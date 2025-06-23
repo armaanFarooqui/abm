@@ -570,7 +570,7 @@ end
 ;; Export agent-level data for each tick to a CSV file
 to write-csv-output
   file-open "data/outputs/csv/agent-output.csv"
-  ask turtles [
+  ask turtles with [activity != nobody and landuse != nobody] [  ;; guard clause
     let agent-type ""
     if is-child? self [set agent-type "child"]
     if is-adult? self [set agent-type "adult"]
@@ -579,15 +579,11 @@ to write-csv-output
     if is-tourist-adult? self [set agent-type "tourist-adult"]
     if is-tourist-senior? self [set agent-type "tourist-senior"]
 
-
-    file-print ( (word ticks ","
-                      agent-type ","
-                      activity ","
-                      bite-stat ","
-                      landuse))
+    file-print (word ticks "," agent-type "," activity "," bite-stat "," landuse)
   ]
   file-close
 end
+
 
 to update-bite-counts
   ;; Always reset patch bite counts each tick
