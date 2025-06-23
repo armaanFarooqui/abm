@@ -10,9 +10,6 @@ to evaluate-tick-bite-risk [temp]
     if activity = 4 [ set exposure-level 0.07 ] ;; others (work)
     if activity = 5 [ set exposure-level 0.00 ] ;; indoors
 
-    ;; ✅ Override tick-density only for this turtle if activity = 5
-    let local-tick-density ifelse-value (activity = 5) [0] [tick-density]
-
     ;; Get month-risk value
     let month tick-to-month
     let month-risk 0
@@ -29,10 +26,16 @@ to evaluate-tick-bite-risk [temp]
     if month = 11 [ set month-risk 0.013 ]
     if month = 12 [ set month-risk 0.037 ]
 
-    ;; ✅ Use local-tick-density instead of global tick-density
+    ;; Explicitly skip bite-risk if activity = 5 (indoors)
+    if activity = 5 [
+      set bite-stat false ;; explicitly say not bitten
+      stop                ;; skip rest of bite-risk computation
+    ]
+
+    ;; Continue risk calculation for others
     let weighted-risk-enhancers (
       (risk-factor     * 0.06) +
-      (local-tick-density * 0.03) +
+      (tick-density    * 0.03) +
       (patch-risk      * 0.25) +
       (exposure-level  * 0.50) +
       (month-risk      * 0.12)
