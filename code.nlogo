@@ -418,7 +418,7 @@ to read-weather
   set temperature item 1 row
 end
 
-;; Activities
+;; old Activities
 ; 1 = dog walking
 ; 2 = gardening
 ; 3 = green maintenance
@@ -427,6 +427,14 @@ end
 ; 6 = picnicking
 ; 7 = others (work)
 ; 8 = indoors
+
+;; new Activities
+; 1 = gardening and green maintenance
+; 2 = picnicking and playing
+; 3 = walking and dog walking
+; 4 = others (work)
+; 5 = indoors
+
 
 to assign-activities
   ;; Define flags
@@ -445,52 +453,52 @@ to assign-activities
   ;; Adults
   (ifelse
     is-weekday and not is-adult-vacation [
-      ask adults [ set activity 7 ]
+      ask adults [ set activity 4 ]
     ]
     is-hot-or-rainy [
-      ask adults [ set activity 8 ]
+      ask adults [ set activity 5 ]
     ]
-    [ ask adults [ set activity one-of [1 2 3 4 5 6 7 8] ] ]
+    [ ask adults [ set activity one-of [1 2 3 4 5] ] ]
   )
 
   ;; Students
   (ifelse
     is-weekday and not is-student-vacation [
-      ask students [ set activity 7 ]
+      ask students [ set activity 4 ]
     ]
     is-hot-or-rainy [
-      ask students [ set activity 8 ]
+      ask students [ set activity 5 ]
     ]
-    [ ask students [ set activity one-of [1 2 3 4 5 6 7 8] ] ]
+    [ ask students [ set activity one-of [1 2 3 4 5] ] ]
   )
 
   ;; Children
   (ifelse
     is-hot-or-rainy [
-      ask children [ set activity 8 ]
+      ask children [ set activity 5 ]
     ]
-    [ ask children [ set activity one-of [1 2 3 4 5 6 7 8] ] ]
+    [ ask children [ set activity one-of [1 2 3 4 5] ] ]
   )
 
   ;; Seniors
   (ifelse
     is-hot-or-rainy [
-      ask seniors [ set activity 8 ]
+      ask seniors [ set activity 5 ]
     ]
-    [ ask seniors [ set activity one-of [1 2 3 4 5 6 7 8] ] ]
+    [ ask seniors [ set activity one-of [1 2 3 4 5] ] ]
   )
 
   ;; Tourists
   (ifelse
     is-hot-or-rainy [
-      ask tourists-children [ set activity 8 ]
-      ask tourists-adults [ set activity 8 ]
-      ask tourists-seniors [ set activity 8 ]
+      ask tourists-children [ set activity 5 ]
+      ask tourists-adults [ set activity 5 ]
+      ask tourists-seniors [ set activity 5 ]
     ]
     [
-      ask tourists-children [ set activity one-of [1 2 3 4 5 6 7 8] ]
-      ask tourists-adults [ set activity one-of [1 2 3 4 5 6 7 8] ]
-      ask tourists-seniors [ set activity one-of [1 2 3 4 5 6 7 8] ]
+      ask tourists-children [ set activity one-of [1 2 3 4 5] ]
+      ask tourists-adults [ set activity one-of [1 2 3 4 5] ]
+      ask tourists-seniors [ set activity one-of [1 2 3 4 5] ]
     ]
   )
 end
@@ -501,13 +509,13 @@ end
 to move-turtles
   ask turtles [
 
-    if (activity = 1 or activity = 2 or activity = 3 or activity = 5 or activity = 8) [
+    if (activity = 1 or activity = 3 or activity = 5) [
       move-to one-of patches with [landuse = 20]
     ]
-    if (activity = 7) [
+    if (activity = 4) [
       move-to one-of patches with [landuse = 62]
     ]
-    if (activity = 4 or activity = 6) [
+    if (activity = 2) [
       move-to one-of patches with [landuse = 60 or landuse = 61]
     ]
 
