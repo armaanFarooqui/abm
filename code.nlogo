@@ -38,7 +38,7 @@ globals [
   landuse-dataset shape-dataset
   precipitation temperature
   output-file bite-count new-bites
-  weather-list
+  weather-list raster-dataset tickmap-dataset
 
   ;; Total cumulative bite counters
   total-bites-children total-bites-adults total-bites-seniors
@@ -93,6 +93,7 @@ to setup
   ;; Setup spatial and agent components
   setup-environment
   setup-agents
+
 
   ;; Initialize bite counters
   set bite-count 0
@@ -168,16 +169,20 @@ to setup-environment
   gis:set-world-envelope (gis:envelope-of landuse-dataset)
   gis:apply-raster landuse-dataset landuse
 
+  set tickmap-dataset gis:load-dataset "data/density/tick_density.asc"
+  gis:apply-raster tickmap-dataset tick-density
+
   ask patches [
     ;; Assign tick density and risk based on landuse code
-    if landuse = 20 [set pcolor red set tick-density 0.66 set patch-risk 0.32]; residential
-    if landuse = 60 [set pcolor green set tick-density 0.15 set patch-risk 0.50]; forest
-    if landuse = 61 [set pcolor brown set tick-density 0.10 set patch-risk 0.04]; dunes/ sand
-    if landuse = 62 [set pcolor grey set tick-density 0.08 set patch-risk 0.01]; other (offices)
+    if landuse = 20 [set pcolor red  set patch-risk 0.32]; residential set tick-density 0.66
+    if landuse = 60 [set pcolor green  set patch-risk 0.50]; forest set tick-density 0.15
+    if landuse = 61 [set pcolor brown  set patch-risk 0.04]; dunes/ sand set tick-density 0.10
+    if landuse = 62 [set pcolor grey  set patch-risk 0.01]; other (offices) set tick-density 0.08
   ]
 
   ;; Load municipality border
   set shape-dataset gis:load-dataset "data/Ede/Ede_shape.shp"
+  ;;gis:set-world-envelope (gis:envelope-of shape-dataset)
   gis:set-drawing-color white
   gis:draw shape-dataset 1
   draw-legend
@@ -236,7 +241,7 @@ to setup-agents
 
     ;; Create tourists (children)
     create-tourists-children tourists-children-number [
-    move-to one-of patches with [landuse > 0]
+    move-to one-of patches with [landuse = 62]
     set color yellow set shape "person"
     set original-color color
     set stay-duration stay-duration
@@ -249,7 +254,7 @@ to setup-agents
 
   ;; Create tourists (adults)
   create-tourists-adults tourists-adults-number [
-    move-to one-of patches with [landuse > 0]
+    move-to one-of patches with [landuse = 62]
     set color yellow set shape "person"
     set original-color color
     set stay-duration stay-duration
@@ -262,7 +267,7 @@ to setup-agents
 
   ;; Create tourists (seniors)
   create-tourists-seniors tourists-seniors-number [
-    move-to one-of patches with [landuse > 0]
+    move-to one-of patches with [landuse = 62]
     set color yellow set shape "person"
     set original-color color
     set stay-duration stay-duration
@@ -329,62 +334,79 @@ if ticks >= length weather-list [
   set new-tourists-seniors-group-history lput (list ticks new-bites-tourists-seniors) new-tourists-seniors-group-history
 
   ;; Regenerate tourists if their stay has ended (simulating tourist turnover)
-  ask tourists-children [
-  if (ticks - arrival-tick) >= stay-duration [
-    ;; Store current location
-    let where patch-here
-    let n tourists-children-number  ;; Save how many new ones to create
-    let d stay-duration            ;; Save the same stay-duration if desired
-    die
+  let new-tourist-children-count 0
+  let d stay-duration
 
-    ;; Spawn new tourists-children at the same patch
-    ask where [
-      sprout-tourists-children n [
-        set stay-duration d
-        set arrival-tick ticks
-        ;; any other setup here
-      ]
-    ]
+;; Count and remove tourists-children who need to leave
+ask tourists-children [
+  if (ticks - arrival-tick) >= stay-duration [
+    set new-tourist-children-count new-tourist-children-count + 1
+    die
   ]
 ]
 
+;; Create new tourists-children on work (hotel) landuse
+create-tourists-children new-tourist-children-count [
+  move-to one-of patches with [landuse = 62]
+  set stay-duration d
+  set arrival-tick ticks
+  set color yellow
+  set shape "person"
+  set original-color color
+  set risk-factor 0.24
+  set protection-level ifelse-value use-fixed-protection [tourist-children-protection] [0.1 + random-float 0.9]
+  set awareness ifelse-value use-fixed-awareness [tourist-children-awareness] [0.1 + random-float 0.9]
+  set age-group "tourist-child"
+]
+
+  let new-tourist-adults-count 0
+
+;; Count and remove tourists-adults who need to leave
 ask tourists-adults [
   if (ticks - arrival-tick) >= stay-duration [
-    ;; Store current location
-    let where patch-here
-    let n tourists-children-number  ;; Save how many new ones to create
-    let d stay-duration            ;; Save the same stay-duration if desired
+    set new-tourist-adults-count new-tourist-adults-count + 1
     die
-
-    ;; Spawn new tourists-children at the same patch
-    ask where [
-      sprout-tourists-children n [
-        set stay-duration d
-        set arrival-tick ticks
-        ;; any other setup here
-      ]
-    ]
   ]
 ]
 
+;; Create new tourists-adults on work (hotel) landuse
+create-tourists-adults new-tourist-adults-count [
+  move-to one-of patches with [landuse = 62]
+  set stay-duration d
+  set arrival-tick ticks
+  set color yellow
+  set shape "person"
+  set original-color color
+  set risk-factor 0.50
+  set protection-level ifelse-value use-fixed-protection [tourist-adults-protection] [0.1 + random-float 0.9]
+  set awareness ifelse-value use-fixed-awareness [tourist-adults-awareness] [0.1 + random-float 0.9]
+  set age-group "tourist-adult"
+]
+
+let new-tourist-seniors-count 0
+
+;; Count and remove tourists-seniors who need to leave
 ask tourists-seniors [
   if (ticks - arrival-tick) >= stay-duration [
-    ;; Store current location
-    let where patch-here
-    let n tourists-children-number  ;; Save how many new ones to create
-    let d stay-duration            ;; Save the same stay-duration if desired
+    set new-tourist-seniors-count new-tourist-seniors-count + 1
     die
-
-    ;; Spawn new tourists-children at the same patch
-    ask where [
-      sprout-tourists-children n [
-        set stay-duration d
-        set arrival-tick ticks
-        ;; any other setup here
-      ]
-    ]
   ]
 ]
+
+;; Create new tourists-seniors on work (hotel) landuse
+create-tourists-seniors new-tourist-seniors-count [
+  move-to one-of patches with [landuse = 62]
+  set stay-duration d
+  set arrival-tick ticks
+  set color yellow
+  set shape "person"
+  set original-color color
+  set risk-factor 0.20
+  set protection-level ifelse-value use-fixed-protection [tourist-seniors-protection] [0.1 + random-float 0.9]
+  set awareness ifelse-value use-fixed-awareness [tourist-seniors-awareness] [0.1 + random-float 0.9]
+  set age-group "tourist-senior"
+]
+
 
   tick
 end
@@ -580,23 +602,60 @@ end
 
 ;; Update the color of the patches and turtles based on the selected visualization layer
 to update-visualization
-  ifelse show-bite-heatmap [;; Show red-scaled heatmap of bite counts per patch
-    let max-bites max [patch-bite-count] of patches
-    if max-bites = 0 [ set max-bites 1 ] ;; Avoid division by zero when no bites yet
-    ask patches [
-      set pcolor scale-color red patch-bite-count 0 max-bites
+  ifelse show-bite-heatmap [
+  let max-bites max [patch-bite-count] of patches
+  if max-bites = 0 [ set max-bites 1 ]
+
+  ask patches [
+    if gis:intersects? shape-dataset self [
+      let c patch-bite-count
+      let m max-bites
+
+      if c >= 0 and c <= (m * 0.01) [ set pcolor green ]
+      if c > (m * 0.01) and c <= (m * 0.02) [ set pcolor grey ]
+      if c > (m * 0.02) [ set pcolor red ]
     ]
-  ] [
-    ifelse show-tick-density [;; Show green-scaled heatmap of tick density
-      ask patches [
-        set pcolor scale-color green tick-density 0 1
-      ]
-    ] [
-      ifelse show-patch-risk [;; Show red-scaled heatmap of calculated patch risk
-        ask patches [
-          set pcolor scale-color red patch-risk 0 1
-        ]
-      ] [
+    if not gis:intersects? shape-dataset self [
+      set pcolor black
+    ]
+  ]
+]
+
+
+  [
+
+    ifelse show-tick-density [
+  ask patches [
+    ;; Only apply color if patch is inside the Ede boundary
+    if gis:intersects? shape-dataset self [
+      let d tick-density
+      if d >= 0 and d <= 0.016 [ set pcolor green ]
+      if d > 0.016 and d <= 0.032 [ set pcolor grey ]
+      if d > 0.032 [ set pcolor red ]
+    ]
+    ;; Colour patches outside boundary black
+    if not gis:intersects? shape-dataset self [
+      set pcolor black  ;;
+    ]
+  ]
+]
+
+ [
+      ifelse show-patch-risk [
+  ask patches [
+    ;; Only apply color if patch is inside the Ede boundary
+    if gis:intersects? shape-dataset self [
+      let r patch-risk
+      if r >= 0 and r <= 0.2 [ set pcolor green ]
+      if r > 0.2 and r <= 0.4 [ set pcolor grey ]
+      if r > 0.4 [ set pcolor red ]
+    ]
+    ;; Colour patches outside boundary black
+    if not gis:intersects? shape-dataset self [
+      set pcolor black  ;;
+    ]
+  ]
+] [
         ;; Default view: color patches by land use class
         ask patches [
           if landuse = 20 [ set pcolor red ]
@@ -642,23 +701,23 @@ show-legend-entry (min-pxcor) (min-pycor + 1) "Tourists" yellow
   ;; Show legend depending on which layer is being visualized
   if show-tick-density [
     let y min-pycor
-    show-legend-entry (max-pxcor - 7) (min-pycor + 3) "Low Density" white
-    show-legend-entry (max-pxcor - 7) (min-pycor + 2) "Medium Density" 53
-    show-legend-entry (max-pxcor - 7) (min-pycor + 1) "High Density" 51
+    show-legend-entry (max-pxcor - 7) (min-pycor + 3) "Low Density" green
+    show-legend-entry (max-pxcor - 7) (min-pycor + 2) "Medium Density" grey
+    show-legend-entry (max-pxcor - 7) (min-pycor + 1) "High Density" red
 
   ]
 
   if show-patch-risk [
-    show-legend-entry (max-pxcor - 6) (min-pycor + 3) "Low Risk" 14
-    show-legend-entry (max-pxcor - 6) (min-pycor + 2) "Medium Risk" 12
-    show-legend-entry (max-pxcor - 6) (min-pycor + 1) "High Risk" black
+    show-legend-entry (max-pxcor - 6) (min-pycor + 3) "Low Risk" green
+    show-legend-entry (max-pxcor - 6) (min-pycor + 2) "Medium Risk" grey
+    show-legend-entry (max-pxcor - 6) (min-pycor + 1) "High Risk" red
 
   ]
 
   if show-bite-heatmap [
-    show-legend-entry (max-pxcor - 6) (min-pycor + 3) "Low Risk" white
-    show-legend-entry (max-pxcor - 6) (min-pycor + 2) "Medium Risk" 14
-    show-legend-entry (max-pxcor - 6) (min-pycor + 1) "High Risk" black
+    show-legend-entry (max-pxcor - 6) (min-pycor + 3) "Low Risk" green
+    show-legend-entry (max-pxcor - 6) (min-pycor + 2) "Medium Risk" grey
+    show-legend-entry (max-pxcor - 6) (min-pycor + 1) "High Risk" red
 
   ]
 
