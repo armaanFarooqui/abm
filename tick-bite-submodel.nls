@@ -1,10 +1,8 @@
-;; This submodel evaluates tick bite risk for each turtle.
-;; It is independent of main model state and requires input values.
-
 to evaluate-tick-bite-risk [temp]
   if temp < 7 [stop]
 
   ask turtles [
+
     ;; Set exposure-level based on activity type
     if activity = 1 [ set exposure-level 0.23 ] ;; gardening
     if activity = 2 [ set exposure-level 0.18 ] ;; picnicking 
@@ -12,6 +10,8 @@ to evaluate-tick-bite-risk [temp]
     if activity = 4 [ set exposure-level 0.07 ] ;; others (work)
     if activity = 5 [ set exposure-level 0.00 ] ;; indoors
 
+    ;; ✅ Override tick-density only for this turtle if activity = 5
+    let local-tick-density ifelse-value (activity = 5) [0] [tick-density]
 
     ;; Get month-risk value
     let month tick-to-month
@@ -29,24 +29,21 @@ to evaluate-tick-bite-risk [temp]
     if month = 11 [ set month-risk 0.013 ]
     if month = 12 [ set month-risk 0.037 ]
 
-    
-let weighted-risk-enhancers (
-  (risk-factor           * 0.03) +
-  (tick-density          * 0.50) +
-  (patch-risk            * 0.12) +
-  (exposure-level        * 0.25) +
-  (month-risk            * 0.06)
-)
+    ;; ✅ Use local-tick-density instead of global tick-density
+    let weighted-risk-enhancers (
+      (risk-factor     * 0.03) +
+      (local-tick-density * 0.50) +
+      (patch-risk      * 0.12) +
+      (exposure-level  * 0.25) +
+      (month-risk      * 0.06)
+    )
 
+    let weighted-risk-reducers (
+      ((1 - protection-level) * 0.50) +
+      ((1 - awareness)        * 0.50)
+    )
 
-let weighted-risk-reducers (
-  ((1 - protection-level) * 0.50) +
-  ((1 - awareness)        * 0.50)
-)
-
-let bite-risk weighted-risk-enhancers * weighted-risk-reducers
-
-
+    let bite-risk weighted-risk-enhancers * weighted-risk-reducers
 
     ;; Stochastic infection based on bite-risk
     if random-float 1 < bite-risk [
