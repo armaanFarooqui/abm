@@ -315,6 +315,12 @@ if current-month >= 6 and current-month <= 8 [
       die
     ]
   ]
+
+  ;; If no tourists exist, create some anyway
+if count tourists-children = 0 [
+  set new-tourist-children-count tourists-children-number
+]
+
   create-tourists-children new-tourist-children-count [
     move-to one-of patches with [landuse = 20]
     set stay-duration d
@@ -336,6 +342,12 @@ if current-month >= 6 and current-month <= 8 [
       die
     ]
   ]
+
+  ;; If no tourists exist, create some anyway
+if count tourists-adults = 0 [
+  set new-tourist-adults-count tourists-adults-number
+]
+
   create-tourists-adults new-tourist-adults-count [
     move-to one-of patches with [landuse = 20]
     set stay-duration d
@@ -357,6 +369,12 @@ if current-month >= 6 and current-month <= 8 [
       die
     ]
   ]
+
+  ;; If no tourists exist, create some anyway
+if count tourists-seniors = 0 [
+  set new-tourist-seniors-count tourists-seniors-number
+]
+
   create-tourists-seniors new-tourist-seniors-count [
     move-to one-of patches with [landuse = 20]
     set stay-duration d
