@@ -25,6 +25,13 @@ to evaluate-tick-bite-risk [temp]
     if month = 11 [ set month-risk 0.013 ]
     if month = 12 [ set month-risk 0.037 ]
 
+   ;; Explicitly skip bite-risk if activity = 4 (indoors)
+    if activity = 4 [
+      set bite-stat false ;; explicitly say not bitten
+      stop                ;; skip rest of bite-risk computation
+    ]
+
+
     
     ;; Continue risk calculation for others
     let weighted-risk-enhancers (
