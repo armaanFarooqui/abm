@@ -355,7 +355,7 @@ if count tourists-adults = 0 [
     set color yellow
     set shape "person"
     set original-color color
-    set risk-factor 0.50
+    set risk-factor 0.55
     set protection-level ifelse-value use-fixed-protection [tourist-adults-protection] [0.1 + random-float 0.9]
     set awareness ifelse-value use-fixed-awareness [tourist-adults-awareness] [0.1 + random-float 0.9]
     set age-group "tourist-adult"
@@ -482,8 +482,6 @@ to assign-activities
     ]
   )
 end
-
-
 
 ;; Move agents to land-use patches based on activity and weather
 to move-turtles
@@ -1182,7 +1180,7 @@ tourists-children-number
 tourists-children-number
 0
 200
-55.0
+20.0
 5
 1
 NIL
@@ -1197,7 +1195,7 @@ tourists-adults-number
 tourists-adults-number
 0
 200
-160.0
+60.0
 5
 1
 NIL
@@ -1212,7 +1210,7 @@ tourists-seniors-number
 tourists-seniors-number
 0
 200
-55.0
+20.0
 5
 1
 NIL
