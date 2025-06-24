@@ -39,6 +39,8 @@ globals [
   precipitation temperature
   output-file bite-count new-bites
   weather-list raster-dataset tickmap-dataset
+  tourists-already-created? ;; prevents mass creation each tick
+
 
   ;; Total cumulative bite counters
   total-bites-children total-bites-adults total-bites-seniors
@@ -140,6 +142,8 @@ to setup
   set new-tourists-adults-group-history []
   set new-tourists-seniors-group-history []
 
+  set tourists-already-created? false ;; Check if tourists exist
+
   ;; Draw the map index
   draw-legend
 
@@ -239,45 +243,6 @@ to setup-agents
     set age-group "senior"
   ]
 
-    ;; Create tourists (children)
-    create-tourists-children tourists-children-number [
-    move-to one-of patches with [landuse = 20]
-    set color yellow set shape "person"
-    set original-color color
-    set stay-duration stay-duration
-    set arrival-tick ticks
-    set risk-factor 0.24
-    set protection-level ifelse-value use-fixed-protection [tourist-children-protection] [0.1 + random-float 0.9]
-    set awareness ifelse-value use-fixed-awareness [tourist-children-awareness] [0.1 + random-float 0.9]
-    set age-group "tourist-child"
-  ]
-
-  ;; Create tourists (adults)
-  create-tourists-adults tourists-adults-number [
-    move-to one-of patches with [landuse = 20]
-    set color yellow set shape "person"
-    set original-color color
-    set stay-duration stay-duration
-    set arrival-tick ticks
-    set risk-factor 0.50
-    set protection-level ifelse-value use-fixed-protection [tourist-adults-protection] [0.1 + random-float 0.9]
-    set awareness ifelse-value use-fixed-awareness [tourist-adults-awareness] [0.1 + random-float 0.9]
-    set age-group "tourist-adult"
-  ]
-
-  ;; Create tourists (seniors)
-  create-tourists-seniors tourists-seniors-number [
-    move-to one-of patches with [landuse = 20]
-    set color yellow set shape "person"
-    set original-color color
-    set stay-duration stay-duration
-    set arrival-tick ticks
-    set risk-factor 0.20
-    set protection-level ifelse-value use-fixed-protection [tourist-seniors-protection] [0.1 + random-float 0.9]
-    set awareness ifelse-value use-fixed-awareness [tourist-seniors-awareness] [0.1 + random-float 0.9]
-    set age-group "tourist-senior"
-  ]
-
 end
 
 to go
@@ -333,80 +298,78 @@ if ticks >= length weather-list [
   set new-tourists-adults-group-history lput (list ticks new-bites-tourists-adults) new-tourists-adults-group-history
   set new-tourists-seniors-group-history lput (list ticks new-bites-tourists-seniors) new-tourists-seniors-group-history
 
-  ;; Regenerate tourists if their stay has ended (simulating tourist turnover)
+  ;; Tourist handling
+let current-month tick-to-month
+let d stay-duration
+
+;; Only do this if it's June–August
+if current-month >= 6 and current-month <= 8 [
+
+  ;; For each tourist group: remove those whose stay is over, and spawn new ones
+
+  ;; CHILDREN
   let new-tourist-children-count 0
-  let d stay-duration
-
-;; Count and remove tourists-children who need to leave
-ask tourists-children [
-  if (ticks - arrival-tick) >= stay-duration [
-    set new-tourist-children-count new-tourist-children-count + 1
-    die
+  ask tourists-children [
+    if (ticks - arrival-tick) >= stay-duration [
+      set new-tourist-children-count new-tourist-children-count + 1
+      die
+    ]
   ]
-]
+  create-tourists-children new-tourist-children-count [
+    move-to one-of patches with [landuse = 20]
+    set stay-duration d
+    set arrival-tick ticks
+    set color yellow
+    set shape "person"
+    set original-color color
+    set risk-factor 0.24
+    set protection-level ifelse-value use-fixed-protection [tourist-children-protection] [0.1 + random-float 0.9]
+    set awareness ifelse-value use-fixed-awareness [tourist-children-awareness] [0.1 + random-float 0.9]
+    set age-group "tourist-child"
+  ]
 
-;; Create new tourists-children on work (hotel) landuse
-create-tourists-children new-tourist-children-count [
-  move-to one-of patches with [landuse = 20]
-  set stay-duration d
-  set arrival-tick ticks
-  set color yellow
-  set shape "person"
-  set original-color color
-  set risk-factor 0.24
-  set protection-level ifelse-value use-fixed-protection [tourist-children-protection] [0.1 + random-float 0.9]
-  set awareness ifelse-value use-fixed-awareness [tourist-children-awareness] [0.1 + random-float 0.9]
-  set age-group "tourist-child"
-]
-
+  ;; ADULTS
   let new-tourist-adults-count 0
+  ask tourists-adults [
+    if (ticks - arrival-tick) >= stay-duration [
+      set new-tourist-adults-count new-tourist-adults-count + 1
+      die
+    ]
+  ]
+  create-tourists-adults new-tourist-adults-count [
+    move-to one-of patches with [landuse = 20]
+    set stay-duration d
+    set arrival-tick ticks
+    set color yellow
+    set shape "person"
+    set original-color color
+    set risk-factor 0.50
+    set protection-level ifelse-value use-fixed-protection [tourist-adults-protection] [0.1 + random-float 0.9]
+    set awareness ifelse-value use-fixed-awareness [tourist-adults-awareness] [0.1 + random-float 0.9]
+    set age-group "tourist-adult"
+  ]
 
-;; Count and remove tourists-adults who need to leave
-ask tourists-adults [
-  if (ticks - arrival-tick) >= stay-duration [
-    set new-tourist-adults-count new-tourist-adults-count + 1
-    die
+  ;; SENIORS
+  let new-tourist-seniors-count 0
+  ask tourists-seniors [
+    if (ticks - arrival-tick) >= stay-duration [
+      set new-tourist-seniors-count new-tourist-seniors-count + 1
+      die
+    ]
+  ]
+  create-tourists-seniors new-tourist-seniors-count [
+    move-to one-of patches with [landuse = 20]
+    set stay-duration d
+    set arrival-tick ticks
+    set color yellow
+    set shape "person"
+    set original-color color
+    set risk-factor 0.20
+    set protection-level ifelse-value use-fixed-protection [tourist-seniors-protection] [0.1 + random-float 0.9]
+    set awareness ifelse-value use-fixed-awareness [tourist-seniors-awareness] [0.1 + random-float 0.9]
+    set age-group "tourist-senior"
   ]
 ]
-
-;; Create new tourists-adults on work (hotel) landuse
-create-tourists-adults new-tourist-adults-count [
-  move-to one-of patches with [landuse = 20]
-  set stay-duration d
-  set arrival-tick ticks
-  set color yellow
-  set shape "person"
-  set original-color color
-  set risk-factor 0.50
-  set protection-level ifelse-value use-fixed-protection [tourist-adults-protection] [0.1 + random-float 0.9]
-  set awareness ifelse-value use-fixed-awareness [tourist-adults-awareness] [0.1 + random-float 0.9]
-  set age-group "tourist-adult"
-]
-
-let new-tourist-seniors-count 0
-
-;; Count and remove tourists-seniors who need to leave
-ask tourists-seniors [
-  if (ticks - arrival-tick) >= stay-duration [
-    set new-tourist-seniors-count new-tourist-seniors-count + 1
-    die
-  ]
-]
-
-;; Create new tourists-seniors on work (hotel) landuse
-create-tourists-seniors new-tourist-seniors-count [
-  move-to one-of patches with [landuse = 20]
-  set stay-duration d
-  set arrival-tick ticks
-  set color yellow
-  set shape "person"
-  set original-color color
-  set risk-factor 0.20
-  set protection-level ifelse-value use-fixed-protection [tourist-seniors-protection] [0.1 + random-float 0.9]
-  set awareness ifelse-value use-fixed-awareness [tourist-seniors-awareness] [0.1 + random-float 0.9]
-  set age-group "tourist-senior"
-]
-
 
   tick
 end
@@ -655,9 +618,9 @@ to update-visualization
     ;; Only apply color if patch is inside the Ede boundary
     if gis:intersects? shape-dataset self [
       let r patch-risk
-      if r >= 0 and r <= 0.2 [ set pcolor green ]
-      if r > 0.2 and r <= 0.4 [ set pcolor grey ]
-      if r > 0.4 [ set pcolor red ]
+      if r >= 0 and r <= 0.3 [ set pcolor green ]
+      if r > 0.3 and r <= 0.5 [ set pcolor grey ]
+      if r > 0.5 [ set pcolor red ]
     ]
     ;; Colour patches outside boundary black
     if not gis:intersects? shape-dataset self [
