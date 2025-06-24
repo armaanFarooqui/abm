@@ -302,6 +302,18 @@ if ticks >= length weather-list [
 let current-month tick-to-month
 let d stay-duration
 
+;; Always remove expired tourists, regardless of month
+ask tourists-children [
+  if (ticks - arrival-tick) >= stay-duration [ die ]
+]
+ask tourists-adults [
+  if (ticks - arrival-tick) >= stay-duration [ die ]
+]
+ask tourists-seniors [
+  if (ticks - arrival-tick) >= stay-duration [ die ]
+]
+
+
 ;; Only do this if it's June–August
 if current-month >= 6 and current-month <= 8 [
 
@@ -309,12 +321,7 @@ if current-month >= 6 and current-month <= 8 [
 
   ;; CHILDREN
   let new-tourist-children-count 0
-  ask tourists-children [
-    if (ticks - arrival-tick) >= stay-duration [
-      set new-tourist-children-count new-tourist-children-count + 1
-      die
-    ]
-  ]
+
 
   ;; If no tourists exist, create some anyway
 if count tourists-children = 0 [
@@ -336,12 +343,7 @@ if count tourists-children = 0 [
 
   ;; ADULTS
   let new-tourist-adults-count 0
-  ask tourists-adults [
-    if (ticks - arrival-tick) >= stay-duration [
-      set new-tourist-adults-count new-tourist-adults-count + 1
-      die
-    ]
-  ]
+
 
   ;; If no tourists exist, create some anyway
 if count tourists-adults = 0 [
@@ -363,12 +365,7 @@ if count tourists-adults = 0 [
 
   ;; SENIORS
   let new-tourist-seniors-count 0
-  ask tourists-seniors [
-    if (ticks - arrival-tick) >= stay-duration [
-      set new-tourist-seniors-count new-tourist-seniors-count + 1
-      die
-    ]
-  ]
+
 
   ;; If no tourists exist, create some anyway
 if count tourists-seniors = 0 [
