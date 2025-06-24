@@ -181,7 +181,7 @@ to setup-environment
     if landuse = 20 [set pcolor red  set patch-risk 0.0]; residential set tick-density 0.66
     if landuse = 60 [set pcolor green  set patch-risk 0.54]; forest set tick-density 0.15
     if landuse = 61 [set pcolor brown  set patch-risk 0.02]; dunes/ sand set tick-density 0.10
-    if landuse = 62 [set pcolor grey  set patch-risk 0.43]; other (offices) set tick-density 0.08
+    if landuse = 62 [set pcolor grey  set patch-risk 0.43]; others set tick-density 0.08
   ]
 
   ;; Load municipality border
@@ -935,7 +935,7 @@ stay-duration
 stay-duration
 1
 30
-30.0
+10.0
 1
 1
 NIL

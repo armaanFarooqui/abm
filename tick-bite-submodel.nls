@@ -35,11 +35,11 @@ to evaluate-tick-bite-risk [temp]
     
     ;; Continue risk calculation for others
     let weighted-risk-enhancers (
-      (risk-factor     * 0.06) +
-      (tick-density    * 0.03) +
-      (patch-risk      * 0.25) +
-      (exposure-level  * 0.50) +
-      (month-risk      * 0.12)
+      (risk-factor     * 0.09) +
+      (tick-density    * 0.07) +
+      (patch-risk      * 0.11) +
+      (exposure-level  * 0.13) +
+      (month-risk      * 0.60)
     )
 
     let weighted-risk-reducers (
