@@ -174,10 +174,10 @@ to setup-environment
 
   ask patches [
     ;; Assign tick density and risk based on landuse code
-    if landuse = 20 [set pcolor red  set patch-risk 0.32]; residential set tick-density 0.66
-    if landuse = 60 [set pcolor green  set patch-risk 0.50]; forest set tick-density 0.15
-    if landuse = 61 [set pcolor brown  set patch-risk 0.04]; dunes/ sand set tick-density 0.10
-    if landuse = 62 [set pcolor grey  set patch-risk 0.01]; other (offices) set tick-density 0.08
+    if landuse = 20 [set pcolor red  set patch-risk 0.0]; residential set tick-density 0.66
+    if landuse = 60 [set pcolor green  set patch-risk 0.54]; forest set tick-density 0.15
+    if landuse = 61 [set pcolor brown  set patch-risk 0.02]; dunes/ sand set tick-density 0.10
+    if landuse = 62 [set pcolor grey  set patch-risk 0.43]; other (offices) set tick-density 0.08
   ]
 
   ;; Load municipality border
@@ -241,7 +241,7 @@ to setup-agents
 
     ;; Create tourists (children)
     create-tourists-children tourists-children-number [
-    move-to one-of patches with [landuse = 62]
+    move-to one-of patches with [landuse = 20]
     set color yellow set shape "person"
     set original-color color
     set stay-duration stay-duration
@@ -254,7 +254,7 @@ to setup-agents
 
   ;; Create tourists (adults)
   create-tourists-adults tourists-adults-number [
-    move-to one-of patches with [landuse = 62]
+    move-to one-of patches with [landuse = 20]
     set color yellow set shape "person"
     set original-color color
     set stay-duration stay-duration
@@ -267,7 +267,7 @@ to setup-agents
 
   ;; Create tourists (seniors)
   create-tourists-seniors tourists-seniors-number [
-    move-to one-of patches with [landuse = 62]
+    move-to one-of patches with [landuse = 20]
     set color yellow set shape "person"
     set original-color color
     set stay-duration stay-duration
@@ -347,7 +347,7 @@ ask tourists-children [
 
 ;; Create new tourists-children on work (hotel) landuse
 create-tourists-children new-tourist-children-count [
-  move-to one-of patches with [landuse = 62]
+  move-to one-of patches with [landuse = 20]
   set stay-duration d
   set arrival-tick ticks
   set color yellow
@@ -371,7 +371,7 @@ ask tourists-adults [
 
 ;; Create new tourists-adults on work (hotel) landuse
 create-tourists-adults new-tourist-adults-count [
-  move-to one-of patches with [landuse = 62]
+  move-to one-of patches with [landuse = 20]
   set stay-duration d
   set arrival-tick ticks
   set color yellow
@@ -395,7 +395,7 @@ ask tourists-seniors [
 
 ;; Create new tourists-seniors on work (hotel) landuse
 create-tourists-seniors new-tourist-seniors-count [
-  move-to one-of patches with [landuse = 62]
+  move-to one-of patches with [landuse = 20]
   set stay-duration d
   set arrival-tick ticks
   set color yellow
@@ -432,8 +432,7 @@ end
 ; 1 = gardening and green maintenance
 ; 2 = picnicking and playing
 ; 3 = walking and dog walking
-; 4 = others (work)
-; 5 = indoors
+; 4 = indoors and work
 
 
 to assign-activities
@@ -456,9 +455,9 @@ to assign-activities
       ask adults [ set activity 4 ]
     ]
     is-hot-or-rainy [
-      ask adults [ set activity 5 ]
+      ask adults [ set activity 4 ]
     ]
-    [ ask adults [ set activity one-of [1 2 3 4 5] ] ]
+    [ ask adults [ set activity one-of [1 2 3 4] ] ]
   )
 
   ;; Students
@@ -467,38 +466,38 @@ to assign-activities
       ask students [ set activity 4 ]
     ]
     is-hot-or-rainy [
-      ask students [ set activity 5 ]
+      ask students [ set activity 4 ]
     ]
-    [ ask students [ set activity one-of [1 2 3 4 5] ] ]
+    [ ask students [ set activity one-of [1 2 3 4] ] ]
   )
 
   ;; Children
   (ifelse
     is-hot-or-rainy [
-      ask children [ set activity 5 ]
+      ask children [ set activity 4 ]
     ]
-    [ ask children [ set activity one-of [1 2 3 4 5] ] ]
+    [ ask children [ set activity one-of [1 2 3 4] ] ]
   )
 
   ;; Seniors
   (ifelse
     is-hot-or-rainy [
-      ask seniors [ set activity 5 ]
+      ask seniors [ set activity 4 ]
     ]
-    [ ask seniors [ set activity one-of [1 2 3 4 5] ] ]
+    [ ask seniors [ set activity one-of [1 2 3 4] ] ]
   )
 
   ;; Tourists
   (ifelse
     is-hot-or-rainy [
-      ask tourists-children [ set activity 5 ]
-      ask tourists-adults [ set activity 5 ]
-      ask tourists-seniors [ set activity 5 ]
+      ask tourists-children [ set activity 4 ]
+      ask tourists-adults [ set activity 4 ]
+      ask tourists-seniors [ set activity 4 ]
     ]
     [
-      ask tourists-children [ set activity one-of [1 2 3 4 5] ]
-      ask tourists-adults [ set activity one-of [1 2 3 4 5] ]
-      ask tourists-seniors [ set activity one-of [1 2 3 4 5] ]
+      ask tourists-children [ set activity one-of [1 2 3 4] ]
+      ask tourists-adults [ set activity one-of [1 2 3 4] ]
+      ask tourists-seniors [ set activity one-of [1 2 3 4] ]
     ]
   )
 end
@@ -509,14 +508,17 @@ end
 to move-turtles
   ask turtles [
 
-    if (activity = 1 or activity = 3 or activity = 5) [
-      move-to one-of patches with [landuse = 20]
-    ]
-    if (activity = 4) [
-      move-to one-of patches with [landuse = 62]
+    if (activity = 1) [
+      move-to one-of patches with [landuse = 60 or landuse = 62 ]
     ]
     if (activity = 2) [
-      move-to one-of patches with [landuse = 60 or landuse = 61]
+      move-to one-of patches with [landuse = 60 or landuse = 61 or landuse = 62]
+    ]
+    if (activity = 3) [
+      move-to one-of patches with [landuse = 60 or landuse = 62]
+    ]
+    if (activity = 4) [
+      move-to one-of patches with [landuse = 20]
     ]
 
   ]
@@ -615,9 +617,9 @@ to update-visualization
       let c patch-bite-count
       let m max-bites
 
-      if c >= 0 and c <= (m * 0.01) [ set pcolor green ]
-      if c > (m * 0.01) and c <= (m * 0.02) [ set pcolor grey ]
-      if c > (m * 0.02) [ set pcolor red ]
+      if c >= 0 and c <= (m * 0.33) [ set pcolor green ]
+      if c > (m * 0.33) and c <= (m * 0.66) [ set pcolor grey ]
+      if c > (m * 0.66) [ set pcolor red ]
     ]
     if not gis:intersects? shape-dataset self [
       set pcolor black
