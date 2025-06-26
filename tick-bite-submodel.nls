@@ -1,5 +1,5 @@
 to evaluate-tick-bite-risk [temp]
-  if temp < 7 [stop]
+  if temp < 7 [ stop ]
 
   ask turtles [
 
@@ -11,37 +11,25 @@ to evaluate-tick-bite-risk [temp]
 
     ;; Get month-risk value
     let month tick-to-month
-    let month-risk 0
-    if month = 1  [ set month-risk 0.002 ]
-    if month = 2  [ set month-risk 0.003 ]
-    if month = 3  [ set month-risk 0.017 ]
-    if month = 4  [ set month-risk 0.065 ]
-    if month = 5  [ set month-risk 0.141 ]
-    if month = 6  [ set month-risk 0.277 ]
-    if month = 7  [ set month-risk 0.264 ]
-    if month = 8  [ set month-risk 0.109 ]
-    if month = 9  [ set month-risk 0.055 ]
-    if month = 10 [ set month-risk 0.044 ]
-    if month = 11 [ set month-risk 0.013 ]
-    if month = 12 [ set month-risk 0.037 ]
+    let month-risk item (month - 1) [0.002 0.003 0.017 0.065 0.141 0.277 0.264 0.109 0.055 0.044 0.013 0.037]
 
-   ;; Explicitly skip bite-risk if activity = 4 (indoors)
-    if activity = 4 [
-      set bite-stat false ;; explicitly say not bitten
-      stop                ;; skip rest of bite-risk computation
-    ]
-
-
-    
-    ;; Continue risk calculation for others
-    let weighted-risk-enhancers (
-      (risk-factor     * 0.09) +
-      (tick-density    * 0.07) +
-      (patch-risk      * 0.11) +
-      (exposure-level  * 0.13) +
-      (month-risk      * 0.60)
+    ;; Reduce month and susceptibility risk indoors or in residence
+    let environment-risk-factor (
+      ifelse-value (activity = 4 or [landuse] of patch-here = 20) [ 0.05 ] [ 1.0 ]
     )
 
+    let adjusted-month-risk month-risk * environment-risk-factor
+    let adjusted-risk-factor risk-factor * environment-risk-factor
+
+
+    ;; Calculate weighted bite risk (adjusted weights)
+    let weighted-risk-enhancers (
+      (risk-factor     * 0.25) +   ;; agent’s susceptibility (age-based, mild influence)
+      (tick-density    * 0.00) +   ;; local tick population from raster (spatially detailed, dynamic)
+      (patch-risk      * 0.25) +   ;; land-use derived patch risk (more general/static)
+      (exposure-level  * 0.25) +   ;; varies by activity: critical for behavior-driven risk
+      (month-risk      * 0.25)     ;; seasonal tick activity (important but capped)
+    )
     let weighted-risk-reducers (
       ((1 - protection-level) * 0.50) +
       ((1 - awareness)        * 0.50)
@@ -50,9 +38,11 @@ to evaluate-tick-bite-risk [temp]
     let bite-risk weighted-risk-enhancers * weighted-risk-reducers
 
     ;; Stochastic infection based on bite-risk
-    if random-float 1 < bite-risk [
+    ifelse random-float 1 < bite-risk [
       set bite-stat true
       ask patch-here [ set patch-bite-count patch-bite-count + 1 ]	
+    ] [
+      set bite-stat false
     ]
   ]
 end

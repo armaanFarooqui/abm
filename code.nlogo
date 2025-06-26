@@ -178,10 +178,10 @@ to setup-environment
 
   ask patches [
     ;; Assign tick density and risk based on landuse code
-    if landuse = 20 [set pcolor red  set patch-risk 0.0]; residential set tick-density 0.66
-    if landuse = 60 [set pcolor green  set patch-risk 0.54]; forest set tick-density 0.15
-    if landuse = 61 [set pcolor brown  set patch-risk 0.02]; dunes/ sand set tick-density 0.10
-    if landuse = 62 [set pcolor grey  set patch-risk 0.43]; others set tick-density 0.08
+    if landuse = 20 [set pcolor red  set patch-risk 0.00]; 
+    if landuse = 60 [set pcolor green  set patch-risk 0.54]; 
+    if landuse = 61 [set pcolor brown  set patch-risk 0.02]; 
+    if landuse = 62 [set pcolor grey  set patch-risk 0.44]; 
   ]
 
   ;; Load municipality border
@@ -198,51 +198,42 @@ end
 
 ;; Create the agents
 to setup-agents
+  ;; Define candidate spawn patches (exclude only dunes if needed)
+  let spawn-patches patches with [landuse = 20 or landuse = 60 or landuse = 62]
 
-  ;; Create residents (children)
+  ;; Children
   create-children initial-number-children [
-    move-to one-of patches with [landuse = 20]
-    set color cyan set shape "person"
-    set original-color color
-    set risk-factor 0.24
-    set protection-level ifelse-value use-fixed-protection [children-protection-level] [0.1 + random-float 0.9]
-    set awareness ifelse-value use-fixed-awareness [children-awareness-level] [0.1 + random-float 0.9]
-    set age-group "child"
+    move-to one-of spawn-patches
+    set-common-attributes "child" cyan 0.24 children-protection-level children-awareness-level
   ]
 
-  ;; Create residents (school children)
+  ;; Students
   create-students initial-number-students [
-    move-to one-of patches with [landuse = 20]
-    set color cyan set shape "person"
-    set original-color color
-    set risk-factor 0.24
-    set protection-level ifelse-value use-fixed-protection [children-protection-level] [0.1 + random-float 0.9]
-    set awareness ifelse-value use-fixed-awareness [children-awareness-level] [0.1 + random-float 0.9]
-    set age-group "student"
+    move-to one-of spawn-patches
+    set-common-attributes "student" cyan 0.24 children-protection-level children-awareness-level
   ]
 
-  ;; Create residents (adults)
+  ;; Adults
   create-adults initial-number-adults [
-    move-to one-of patches with [landuse = 20]
-    set color blue set shape "person"
-    set original-color color
-    set risk-factor 0.55
-    set protection-level ifelse-value use-fixed-protection [adults-protection-level] [0.1 + random-float 0.9]
-    set awareness ifelse-value use-fixed-awareness [adults-awareness-level] [0.1 + random-float 0.9]
-    set age-group "adult"
+    move-to one-of spawn-patches
+    set-common-attributes "adult" blue 0.55 adults-protection-level adults-awareness-level
   ]
 
-  ;; Create residents (seniors)
+  ;; Seniors
   create-seniors initial-number-seniors [
-    move-to one-of patches with [landuse = 20]
-    set color white set shape "person"
-    set original-color color
-    set risk-factor 0.20
-    set protection-level ifelse-value use-fixed-protection [seniors-protection-level] [0.1 + random-float 0.9]
-    set awareness ifelse-value use-fixed-awareness [seniors-awareness-level] [0.1 + random-float 0.9]
-    set age-group "senior"
+    move-to one-of spawn-patches
+    set-common-attributes "senior" white 0.20 seniors-protection-level seniors-awareness-level
   ]
+end
 
+to set-common-attributes [age clr risk prot aware]
+  set color clr
+  set shape "person"
+  set original-color color
+  set risk-factor risk
+  set protection-level ifelse-value use-fixed-protection [prot] [0.1 + random-float 0.9]
+  set awareness ifelse-value use-fixed-awareness [aware] [0.1 + random-float 0.9]
+  set age-group age
 end
 
 to go
@@ -329,7 +320,7 @@ if count tourists-children = 0 [
 ]
 
   create-tourists-children new-tourist-children-count [
-    move-to one-of patches with [landuse = 20]
+    move-to one-of patches with [landuse = 20 or landuse = 60 or landuse = 62]
     set stay-duration d
     set arrival-tick ticks
     set color yellow
@@ -351,7 +342,7 @@ if count tourists-adults = 0 [
 ]
 
   create-tourists-adults new-tourist-adults-count [
-    move-to one-of patches with [landuse = 20]
+    move-to one-of patches with [landuse = 20 or landuse = 60 or landuse = 62]
     set stay-duration d
     set arrival-tick ticks
     set color yellow
@@ -373,7 +364,7 @@ if count tourists-seniors = 0 [
 ]
 
   create-tourists-seniors new-tourist-seniors-count [
-    move-to one-of patches with [landuse = 20]
+    move-to one-of patches with [landuse = 20 or landuse = 60 or landuse = 62]
     set stay-duration d
     set arrival-tick ticks
     set color yellow
@@ -427,55 +418,59 @@ to assign-activities
   let is-adult-vacation (ticks >= 200 and ticks <= 219) ; 19 Jul - 7 Aug
   let is-hot-or-rainy (temperature >= 25 or precipitation >= 5)
 
+
+   ;; Add a 20–40% chance to still be outdoors even in bad conditions
+  let indoor-bias (random-float 1 < 0.6)
+
   ;; Adults
   (ifelse
-    is-weekday and not is-adult-vacation [
+    is-weekday and not is-adult-vacation and indoor-bias [
       ask adults [ set activity 4 ]
     ]
-    is-hot-or-rainy [
+    is-hot-or-rainy and indoor-bias [
       ask adults [ set activity 4 ]
     ]
-    [ ask adults [ set activity one-of [1 2 3 4] ] ]
+    [ ask adults [ set activity one-of [1 2 3] ] ]
   )
 
   ;; Students
   (ifelse
-    is-weekday and not is-student-vacation [
+    is-weekday and not is-student-vacation and indoor-bias [
       ask students [ set activity 4 ]
     ]
-    is-hot-or-rainy [
+    is-hot-or-rainy and indoor-bias [
       ask students [ set activity 4 ]
     ]
-    [ ask students [ set activity one-of [1 2 3 4] ] ]
+    [ ask students [ set activity one-of [1 2 3] ] ]
   )
 
   ;; Children
   (ifelse
-    is-hot-or-rainy [
+    is-hot-or-rainy and indoor-bias [
       ask children [ set activity 4 ]
     ]
-    [ ask children [ set activity one-of [1 2 3 4] ] ]
+    [ ask children [ set activity one-of [1 2 3] ] ]
   )
 
   ;; Seniors
   (ifelse
-    is-hot-or-rainy [
+    is-hot-or-rainy and indoor-bias [
       ask seniors [ set activity 4 ]
     ]
-    [ ask seniors [ set activity one-of [1 2 3 4] ] ]
+    [ ask seniors [ set activity one-of [1 2 3] ] ]
   )
 
   ;; Tourists
   (ifelse
-    is-hot-or-rainy [
+    is-hot-or-rainy and indoor-bias [
       ask tourists-children [ set activity 4 ]
       ask tourists-adults [ set activity 4 ]
       ask tourists-seniors [ set activity 4 ]
     ]
     [
-      ask tourists-children [ set activity one-of [1 2 3 4] ]
-      ask tourists-adults [ set activity one-of [1 2 3 4] ]
-      ask tourists-seniors [ set activity one-of [1 2 3 4] ]
+      ask tourists-children [ set activity one-of [1 2 3] ]
+      ask tourists-adults [ set activity one-of [1 2 3] ]
+      ask tourists-seniors [ set activity one-of [1 2 3] ]
     ]
   )
 end
