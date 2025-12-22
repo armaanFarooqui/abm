@@ -1,0 +1,339 @@
+# %%
+import rasterio
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+
+
+# %%
+enmap_path = r"C:\Users\jahee\OneDrive - University of Twente\Msc_Research\Data_processing\CO_Magdalena\ENMAP_mosaic.tif"
+seep_path  = r"C:\Users\jahee\OneDrive - University of Twente\Msc_Research\Data_processing\Raster_referance_mask\correction\Seep_Percentage_7.tif"
+cont_path  = r"C:\Users\jahee\OneDrive - University of Twente\Msc_Research\Data_processing\Raster_referance_mask\correction\Contamination_Percentage_7.tif"
+
+wavelength_path = r"C:\Users\jahee\Downloads\ENMAP_wavelengths_nm.txt"
+
+# %%
+# 1) Read ENMAP
+with rasterio.open(enmap_path) as src:
+    enmap_raw   = src.read()          # (bands, H, W)
+    enmap_nodata = src.nodata
+    H, W = src.height, src.width
+    n_bands_raw = enmap_raw.shape[0]
+
+print("ENMAP raw shape:", enmap_raw.shape, "NoData value:", enmap_nodata)
+
+# convert to float and set nodata to NaN
+enmap = enmap_raw.astype("float32")
+if enmap_nodata is not None:
+    enmap[enmap_raw == enmap_nodata] = np.nan
+
+# (bands, H, W) -> (H, W, bands) -> (N_pixels, n_bands)
+enmap_hwk   = np.moveaxis(enmap, 0, -1)         # (H, W, bands)
+X_all_full  = enmap_hwk.reshape(-1, n_bands_raw)  # (N_pixels, n_bands)
+
+print("Flattened spectra X_all_full:", X_all_full.shape)
+
+# 2) Read seep and contamination
+with rasterio.open(seep_path) as src:
+    seep = src.read(1).astype("float32")        # (H, W)
+
+with rasterio.open(cont_path) as src:
+    cont = src.read(1).astype("float32")        # (H, W)
+
+assert seep.shape == (H, W)
+assert cont.shape == (H, W)
+
+seep_flat_full = seep.reshape(-1)               # (N_pixels,)
+cont_flat_full = cont.reshape(-1)               # (N_pixels,)
+
+print("seep_flat_full:", seep_flat_full.shape)
+print("cont_flat_full:", cont_flat_full.shape)
+
+# 3) Read wavelengths
+wavelengths = np.loadtxt(wavelength_path)       # (n_bands_raw,)
+print("wavelengths:", wavelengths.shape)
+
+
+# %%
+# classify each pixel before cleaning
+clean_full = (seep_flat_full == 0) & (cont_flat_full == 0)
+seep_only_full = (seep_flat_full > 0) & (cont_flat_full == 0)
+cont_only_full = (cont_flat_full > 0) & (seep_flat_full == 0)
+
+print("BEFORE CLEANING:")
+print("  clean:", clean_full.sum())
+print("  seep_only:", seep_only_full.sum())
+print("  cont_only:", cont_only_full.sum())
+
+
+# %%
+# copy so we don't destroy the originals
+X = X_all_full.copy()
+seep = seep_flat_full.copy()
+cont = cont_flat_full.copy()
+
+# 1) drop all-NaN bands
+band_mean = np.nanmean(X, axis=0)      # mean per band, ignoring NaNs
+good_bands = ~np.isnan(band_mean)      # True where mean is not NaN
+
+X = X[:, good_bands]
+wavelengths_clean = wavelengths[good_bands]   # keep same bands
+
+print("After dropping all-NaN bands, X shape:", X.shape)
+
+
+# %%
+# 2) drop pixels that still have at least one NaN
+row_ok = ~np.isnan(X).any(axis=1)   # True = row has NO NaNs
+
+X_cleaned = X[row_ok, :]
+seep_cleaned = seep[row_ok]
+cont_cleaned = cont[row_ok]
+
+print("Final cleaned X:", X_cleaned.shape)
+print("Final cleaned seep:", seep_cleaned.shape)
+print("Final cleaned cont:", cont_cleaned.shape)
+
+
+# %%
+clean_after = (seep_cleaned == 0) & (cont_cleaned == 0)
+seep_only_after = (seep_cleaned > 0) & (cont_cleaned == 0)
+cont_only_after = (cont_cleaned > 0) & (seep_cleaned == 0)
+
+print("AFTER CLEANING:")
+print("  clean:", clean_after.sum())
+print("  seep_only:", seep_only_after.sum())
+print("  cont_only:", cont_only_after.sum())
+
+
+# %%
+X_clean = X_cleaned[clean_after]
+X_seep  = X_cleaned[seep_only_after]
+X_cont  = X_cleaned[cont_only_after]
+
+seep_vals = seep_cleaned[seep_only_after]  # fractions 0–1
+cont_vals = cont_cleaned[cont_only_after]
+
+print("Clean pixels:", X_clean.shape[0])
+print("Seep-only pixels:", X_seep.shape[0])
+print("Contamination-only pixels:", X_cont.shape[0])
+
+# %%
+# --- Wavelengths ---
+wavelengths = np.loadtxt(wavelength_path)
+if wavelengths.shape[0] > X_clean.shape[1]:
+    wavelengths = wavelengths[:X_clean.shape[1]]
+elif wavelengths.shape[0] < X_clean.shape[1]:
+    # rare case: pad or handle appropriately
+    wavelengths = np.pad(wavelengths, (0, X_clean.shape[1] - wavelengths.shape[0]), mode='edge')
+
+print("Wavelengths:", wavelengths.shape)
+
+# %%
+# ----- Combine spectra -----
+X_all = np.vstack([X_clean, X_seep, X_cont])
+
+# class labels: 0=clean, 1=seep, 2=contamination
+y_all = np.concatenate([
+    np.zeros(X_clean.shape[0], dtype=int),
+    np.ones(X_seep.shape[0],  dtype=int),
+    np.full(X_cont.shape[0], 2, dtype=int)
+])
+
+band_names = [f"band_{i+1}" for i in range(X_all.shape[1])]
+
+df_all = pd.DataFrame(X_all, columns=band_names)
+df_all["class"] = y_all
+
+
+# %%
+df_all
+
+# %%
+# Take all seep + all cont
+df_minority = df_all[df_all["class"] != 0]
+
+# Take equal number of clean pixels
+df_clean_bal = df_all[df_all["class"] == 0].sample(
+    n=len(df_minority), random_state=42
+)
+
+# Balanced EDA dataset
+df_bal = pd.concat([df_minority, df_clean_bal]).reset_index(drop=True)
+
+print(df_bal["class"].value_counts())
+
+
+# %% [markdown]
+# ## Band-to-band Pearson correlation
+
+# %%
+plt.figure(figsize=(8,7), dpi=150)
+corr_bands = df_bal[band_names].corr()
+
+im = plt.imshow(corr_bands.values, vmin=-1, vmax=1, cmap="coolwarm")
+plt.colorbar(im, label="Pearson correlation", shrink=0.8)
+plt.title("Band-to-band correlation (balanced sample)", fontsize=14)
+plt.xlabel("Band index", fontsize=12)
+plt.ylabel("Band index", fontsize=12)
+plt.tight_layout()
+# plt.savefig("fig_band_corr.png", dpi=300, bbox_inches="tight")
+plt.show()
+
+
+# %%
+from scipy.stats import pointbiserialr
+
+# Seep(1) vs clean(0) – ignore contamination
+mask_sc = df_bal["class"].isin([0,1])
+df_sc = df_bal.loc[mask_sc]
+
+y_sc = (df_sc["class"] == 1).astype(int)
+pb_seep = []
+for b in band_names:
+    r, p = pointbiserialr(df_sc[b].values, y_sc.values)
+    pb_seep.append(r)
+pb_seep = np.array(pb_seep)
+
+plt.figure(figsize=(12,4), dpi=150)
+plt.plot(wavelengths, pb_seep)
+plt.axhline(0, color="k", linewidth=1)
+plt.xlabel("Wavelength (nm)", fontsize=12)
+plt.ylabel("Point-biserial r (seep vs clean)", fontsize=12)
+plt.title("Band–class correlation: seep-only vs clean", fontsize=14)
+plt.grid(True, alpha=0.3)
+plt.tight_layout()
+# plt.savefig("fig_pb_seep_clean.png", dpi=300, bbox_inches="tight")
+plt.show()
+
+
+# %%
+# Cont(2) vs clean(0) – ignore seep
+mask_cc = df_bal["class"].isin([0,2])
+df_cc = df_bal.loc[mask_cc]
+
+y_cc = (df_cc["class"] == 2).astype(int)
+pb_cont = []
+for b in band_names:
+    r, p = pointbiserialr(df_cc[b].values, y_cc.values)
+    pb_cont.append(r)
+pb_cont = np.array(pb_cont)
+
+plt.figure(figsize=(12,4), dpi=150)
+plt.plot(wavelengths, pb_cont)
+plt.axhline(0, color="k", linewidth=1)
+plt.xlabel("Wavelength (nm)", fontsize=12)
+plt.ylabel("Point-biserial r (cont vs clean)", fontsize=12)
+plt.title("Band–class correlation: contamination vs clean", fontsize=14)
+plt.grid(True, alpha=0.3)
+plt.tight_layout()
+# plt.savefig("fig_pb_cont_clean.png", dpi=300, bbox_inches="tight")
+plt.show()
+
+
+# %%
+from sklearn.decomposition import PCA
+
+X_bal = df_bal[band_names].values
+y_bal = df_bal["class"].values
+
+pca = PCA(n_components=3, random_state=42)
+X_pca = pca.fit_transform(X_bal)
+
+plt.figure(figsize=(6,6), dpi=150)
+scatter = plt.scatter(X_pca[:,0], X_pca[:,1],
+                      c=y_bal, s=8, cmap="viridis", alpha=0.7)
+plt.xlabel("PC1", fontsize=12)
+plt.ylabel("PC2", fontsize=12)
+plt.title("PCA: PC1 vs PC2 (balanced sample)", fontsize=14)
+cbar = plt.colorbar(scatter, ticks=[0,1,2])
+cbar.ax.set_yticklabels(["clean", "seep", "cont"])
+cbar.set_label("Class")
+plt.grid(True, alpha=0.3)
+plt.tight_layout()
+# plt.savefig("fig_pca_pc1pc2.png", dpi=300, bbox_inches="tight")
+plt.show()
+
+
+# %%
+from sklearn.ensemble import RandomForestClassifier
+
+rf_eda = RandomForestClassifier(
+    n_estimators=300,
+    max_depth=None,
+    class_weight="balanced",
+    n_jobs=-1,
+    random_state=42
+)
+rf_eda.fit(X_bal, y_bal)
+
+importances = rf_eda.feature_importances_
+
+plt.figure(figsize=(12,4), dpi=150)
+plt.plot(wavelengths, importances)
+plt.xlabel("Wavelength (nm)", fontsize=12)
+plt.ylabel("RF feature importance", fontsize=12)
+plt.title("Random Forest feature importance across wavelengths (3-class)", fontsize=14)
+plt.grid(True, alpha=0.3)
+plt.tight_layout()
+# plt.savefig("fig_rf_importance_3class.png", dpi=300, bbox_inches="tight")
+plt.show()
+
+
+# %%
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import classification_report, confusion_matrix
+
+X_train, X_test, y_train, y_test = train_test_split(
+    X_all, y_all,
+    test_size=0.2,
+    random_state=42,
+    stratify=y_all
+)
+
+rf = RandomForestClassifier(
+    n_estimators=500,
+    max_depth=None,
+    class_weight="balanced",
+    n_jobs=-1,
+    random_state=42
+)
+
+rf.fit(X_train, y_train)
+
+y_pred = rf.predict(X_test)
+
+print(classification_report(y_test, y_pred, target_names=["clean","seep","cont"]))
+
+
+# %%
+import numpy as np
+
+cm = confusion_matrix(y_test, y_pred)
+classes = ["clean","seep","cont"]
+
+plt.figure(figsize=(4,4), dpi=150)
+im = plt.imshow(cm, cmap="Blues")
+plt.colorbar(im, fraction=0.046, pad=0.04)
+plt.xticks(np.arange(len(classes)), classes, rotation=45)
+plt.yticks(np.arange(len(classes)), classes)
+plt.xlabel("Predicted", fontsize=12)
+plt.ylabel("True", fontsize=12)
+plt.title("Confusion matrix (RF, 3-class)", fontsize=14)
+
+# annotate cells
+for i in range(cm.shape[0]):
+    for j in range(cm.shape[1]):
+        plt.text(j, i, cm[i, j],
+                 ha="center", va="center",
+                 color="black", fontsize=10)
+
+plt.tight_layout()
+# plt.savefig("fig_cm_rf_3class.png", dpi=300, bbox_inches="tight")
+plt.show()
+
+
+# %%
+
+
+

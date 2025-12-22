@@ -1,0 +1,1186 @@
+# %%
+## Import required libraries 
+import rasterio
+import numpy as np
+import matplotlib.pyplot as plt
+import pandas as pd
+
+
+
+# %%
+## Assigning file paths to the variables
+enmap_path = r"C:\Users\jahee\OneDrive - University of Twente\Msc_Research\Data_processing\CO_Magdalena\ENMAP_mosaic.tif"
+seep_path  = r"C:\Users\jahee\OneDrive - University of Twente\Msc_Research\Data_processing\Raster_referance_mask\correction\Seep_Percentage_7.tif"
+cont_path  = r"C:\Users\jahee\OneDrive - University of Twente\Msc_Research\Data_processing\Raster_referance_mask\correction\Contamination_Percentage_7.tif"
+
+wavelength_path = r"C:\Users\jahee\Downloads\ENMAP_wavelengths_nm.txt"
+wavelengths = np.loadtxt(wavelength_path)   # shape (n_bands,)
+
+
+# %% [markdown]
+# ## Reading the dataset
+
+# %%
+with rasterio.open(enmap_path) as src:
+    enmap_raw   = src.read()          # (bands, H, W)
+    enmap_nodata = src.nodata
+    H, W = src.height, src.width
+    n_bands = enmap_raw.shape[0]
+
+print("ENMAP shape (bands, H, W):", enmap_raw.shape, "nodata:", enmap_nodata)
+
+# convert to float and set nodata to NaN
+enmap = enmap_raw.astype("float32")
+if enmap_nodata is not None:
+    enmap[enmap_raw == enmap_nodata] = np.nan
+
+print("ENMAP shape (bands, H, W):", enmap.shape, "with NaN for nodata :", )
+
+# Load seep and contaminated coverage fractions
+with rasterio.open(seep_path) as src:
+    seep = src.read(1).astype("float32")
+with rasterio.open(cont_path) as src:
+    cont = src.read(1).astype("float32")
+
+print("Seep shape:", seep.shape)
+print("Cont shape:", cont.shape)
+
+
+# %% [markdown]
+# ## Flattening the dataset 
+
+# %%
+# 1) ENMAP to (N_pixels, n_bands)
+enmap_hwk = np.moveaxis(enmap, 0, -1)      # (H, W, bands)
+X_all_full = enmap_hwk.reshape(-1, n_bands)  # (N, bands)
+
+# 2) Seep & cont to (N_pixels,)
+seep_flat_full = seep.reshape(-1)
+cont_flat_full = cont.reshape(-1)
+
+print("H, W and n_bands:", enmap_hwk.shape)
+print("X_all_full:", X_all_full.shape)
+print("seep_flat_full:", seep_flat_full.shape)
+print("cont_flat_full:", cont_flat_full.shape)
+
+
+# %%
+# with rasterio.open(enmap_path) as src:
+#     enmap_raw   = src.read()          # (bands, H, W)
+#     enmap_nodata = src.nodata
+#     H, W = src.height, src.width
+#     n_bands = enmap_raw.shape[0]
+
+# print("ENMAP shape (bands, H, W):", enmap_raw.shape, "nodata:", enmap_nodata)
+
+# # convert to float and set nodata to NaN
+# enmap = enmap_raw.astype("float32")
+# if enmap_nodata is not None:
+#     enmap[enmap_raw == enmap_nodata] = np.nan
+
+
+# # (bands, H, W) -> (H, W, bands) -> (N_pixels, n_bands)
+# enmap_hwk = np.moveaxis(enmap, 0, -1)
+# X_all = enmap_hwk.reshape(-1, enmap_hwk.shape[-1])
+
+# # Load seep and contaminated coverage fractions
+# with rasterio.open(seep_path) as src:
+#     seep = src.read(1).astype("float32")
+# with rasterio.open(cont_path) as src:
+#     cont = src.read(1).astype("float32")
+
+# print("Seep shape:", seep.shape)
+# print("Cont shape:", cont.shape)
+
+# assert seep.shape == (H, W)
+# assert cont.shape == (H, W)
+
+# # 2) Seep & cont to (N_pixels,)
+# seep_flat_full = seep.reshape(-1)
+# cont_flat_full = cont.reshape(-1)
+
+# print("X_all:", X_all.shape)
+# print("seep_flat_full:", seep_flat_full.shape)
+# print("cont_flat_full:", cont_flat_full.shape)
+
+# print("NaNs in X_all before impute:", np.isnan(X_all).sum())
+
+
+
+
+# %% [markdown]
+# ## Identifying the count of Nan values in the Enmap 
+
+# %%
+# Start from the full arrays
+X_all = X_all_full.copy()
+seep_flat = seep_flat_full.copy()
+cont_flat = cont_flat_full.copy()
+
+# Count NaNs per pixel on this X_all
+nan_per_pixel  = np.isnan(X_all).sum(axis=1)
+nan_frac_pixel = nan_per_pixel / X_all.shape[1]
+
+# Keep only pixels with less than 50% NaNs
+valid_pix_mask = nan_frac_pixel < 0.5
+print("Valid pixels after 50% NaN filter:", valid_pix_mask.sum())
+
+# Apply the SAME mask to spectra and masks
+X_all     = X_all[valid_pix_mask, :]
+seep_flat = seep_flat_full[valid_pix_mask]
+cont_flat = cont_flat_full[valid_pix_mask]
+
+print("After pixel filtering, X_all shape:", X_all.shape)
+print("seep_flat shape:", seep_flat.shape)
+print("cont_flat shape:", cont_flat.shape)
+print("NaNs remaining in X_all:", np.isnan(X_all).sum())
+
+
+# %%
+# Count NaNs per pixel
+nan_per_pixel  = np.isnan(X_all).sum(axis=1)
+nan_frac_pixel = nan_per_pixel / X_all.shape[1]
+
+# Keep only pixels with less than 50% NaNs (you can change 0.5 to 0.3, 0.1, etc.)
+good_pixels = nan_frac_pixel < 0.5
+X_all = X_all[good_pixels, :]
+
+# # Keep only pixels with less than 50% NaNs
+# valid_pix_mask = nan_frac_pixel < 0.5
+
+# print("Valid pixels after 50% NaN filter:", valid_pix_mask.sum())
+
+# # Apply the SAME mask to spectra and masks
+# X_all         = X_all[valid_pix_mask, :]
+# seep_flat     = seep_flat_full[valid_pix_mask]
+# cont_flat     = cont_flat_full[valid_pix_mask]
+
+print("After pixel filtering, X_all shape:", X_all.shape)
+print("NaNs remaining:", np.isnan(X_all).sum())
+
+
+# %% [markdown]
+# ## Identifying the Nan bands and completely removing them
+
+# %%
+# Compute mean per band ignoring NaN
+band_means = np.nanmean(X_all, axis=0)
+
+# Bands where mean is NaN => all values were NaN (or no valid data)
+bad_bands  = np.isnan(band_means)
+
+print("Number of bad bands:", bad_bands.sum())
+print("Indices of bad bands:", np.where(bad_bands)[0])
+
+# Remove bad bands
+X_all = X_all[:, ~bad_bands]
+
+
+
+print("After removing bad bands, X_all shape:", X_all.shape)
+print("NaNs still present:", np.isnan(X_all).sum())
+
+
+# %%
+# After you have X_all and have loaded wavelengths
+n_pixels, n_bands = X_all.shape
+print("X_all bands:", n_bands)
+print("wavelengths length before trim:", wavelengths.shape[0])
+
+if wavelengths.shape[0] != n_bands:
+    print("Trimming wavelengths to match X_all.")
+    wavelengths = wavelengths[:n_bands]
+
+print("wavelengths length after trim:", wavelengths.shape[0])
+
+
+# %% [markdown]
+# ## Removing the Nan present in the band pixels 
+
+# %%
+# Find pixels (rows) that still have any NaN values
+nan_rows_mask = np.isnan(X_all).any(axis=1)
+
+print("Pixels with at least one NaN (to be removed):", nan_rows_mask.sum())
+
+# Keep only pixels with no NaNs at all
+X_all = X_all[~nan_rows_mask, :]
+seep_flat = seep_flat[~nan_rows_mask]
+cont_flat = cont_flat[~nan_rows_mask]
+
+print("Final X_all shape (no NaNs):", X_all.shape)
+print("NaNs remaining (should be 0):", np.isnan(X_all).sum())
+print("  seep_flat:", seep_flat.shape)
+print("  cont_flat:", cont_flat.shape)
+
+
+# %%
+df = pd.DataFrame(X_all, columns=[f"band_{i+1}" for i in range(X_all.shape[1])])
+df
+
+
+# %%
+cols = df.loc[:, "band_130":"band_140"]
+cols
+
+
+# %%
+idx = np.random.randint(0, X_all.shape[0])
+spectrum = X_all[idx, :]
+
+plt.figure(figsize=(12, 5))
+plt.plot(spectrum)
+
+plt.xlabel("Spectral Band")
+plt.ylabel("Reflectance / Intensity")
+
+plt.xticks(np.arange(0, 224, 10))   # show ticks every 10 bands
+plt.xlim(0, 223)
+plt.grid(True)
+plt.show()
+
+# %% [markdown]
+# ## Read Seep and Contaminated raster files 
+
+# %%
+# Load seep and contaminated coverage fractions
+with rasterio.open(seep_path) as src:
+    seep = src.read(1).astype("float32")
+with rasterio.open(cont_path) as src:
+    cont = src.read(1).astype("float32")
+
+print("Seep shape:", seep.shape)
+print("Cont shape:", cont.shape)
+
+assert seep.shape == (H, W)
+assert cont.shape == (H, W)
+
+
+
+# %%
+# # ---------- Reshape ENMAP to (N_pixels, n_bands) ----------
+# # enmap: (bands, H, W) → (H, W, bands)
+# enmap_hwk = np.moveaxis(enmap, 0, -1)   # shape (H, W, n_bands)
+
+# # flatten to (N_pixels, n_bands)
+# X_all = enmap_hwk.reshape(-1, n_bands)  # N = H*W
+# print("X_all shape (N_pixels, n_bands):", X_all.shape)
+
+# flatten masks to (N_pixels,)
+seep_flat = seep.reshape(-1)
+cont_flat = cont.reshape(-1)
+
+
+# %%
+# # ---------- SEEP ANALYSIS ----------
+# # Use only pixels where seep > 0 and spectrum has at least one finite value
+# mask_valid_seep = (seep_flat > 0) & np.any(np.isfinite(X_all), axis=1)
+
+# X_seep = X_all[mask_valid_seep]
+# seep_vals = seep_flat[mask_valid_seep]
+
+# print("Number of pixels with seep > 0:", X_seep.shape[0])
+
+# # Prepare arrays to store mean spectra and counts per percentage
+# mean_seep_spectra = np.full((100, n_bands), np.nan, dtype="float32")
+# count_seep = np.zeros(100, dtype="int32")
+
+# # # Loop over percentages 1%..100%
+# # min_pixels_per_bin = 1  
+
+# for p in range(1, 101):   # p = 1..100
+#     low = (p - 1) / 100.0    # e.g. 0.00 for 1%, 0.01 for 2%
+#     high = p / 100.0 + 1e-6  # small epsilon so 1.0 is included
+
+#     # pixels whose seep fraction is within this percentage bin
+#     mask_bin = (seep_vals > low) & (seep_vals <= high)
+#     idx = np.where(mask_bin)[0]
+#     count = idx.size
+#     count_seep[p - 1] = count
+
+#     if count >= min_pixels_per_bin:
+#         # take spectra of those pixels: shape (count, n_bands)
+#         spectra_bin = X_seep[idx, :]
+#         # mean over pixels (axis=0), ignoring NaNs
+#         mean_spec = np.nanmean(spectra_bin, axis=0)
+#         mean_seep_spectra[p - 1, :] = mean_spec
+
+# print("Done computing mean seep spectra for each 1% bin.")
+
+
+# %%
+# print("\nPixel counts for seep per percentage (only >0):")
+# for p in range(1, 101):
+#     # if count_seep[p-1] > 0:
+#         print(f"{p}%: {count_seep[p-1]} pixels")
+
+# %%
+# # ---------- CONTAMINATED ANALYSIS ----------
+# # Use only pixels where contaminated > 0 and spectrum has finite values
+# mask_valid_cont = (cont_flat > 0) & np.any(np.isfinite(X_all), axis=1)
+
+# X_cont = X_all[mask_valid_cont]
+# cont_vals = cont_flat[mask_valid_cont]
+
+# print("\nNumber of pixels with contaminated > 0:", X_cont.shape[0])
+
+# mean_cont_spectra = np.full((100, n_bands), np.nan, dtype="float32")
+# count_cont = np.zeros(100, dtype="int32")
+
+# # Loop over percentages 1%..100%
+# min_pixels_per_bin = 1  
+
+# for p in range(1, 101):   # p = 1..100
+#     low = (p - 1) / 100.0
+#     high = p / 100.0 + 1e-6
+
+#     mask_bin = (cont_vals > low) & (cont_vals <= high)
+#     idx = np.where(mask_bin)[0]
+#     count = idx.size
+#     count_cont[p - 1] = count
+
+#     if count >= min_pixels_per_bin:
+#         spectra_bin = X_cont[idx, :]
+#         mean_spec = np.nanmean(spectra_bin, axis=0)
+#         mean_cont_spectra[p - 1, :] = mean_spec
+
+# print("Done computing mean contaminated spectra for each 1% bin.")
+
+
+# %%
+# print("\nPixel counts for contaminated per percentage (only >0):")
+# for p in range(1, 101):
+#     if count_cont[p-1] > 0:
+#         print(f"{p}%: {count_cont[p-1]} pixels")
+
+# %%
+# import numpy as np
+# import matplotlib.pyplot as plt
+
+# wavelength_path = r"C:\Users\jahee\Downloads\ENMAP_wavelengths_nm.txt"
+# wavelengths = np.loadtxt(wavelength_path)   # shape (n_bands,)
+
+# n_pixels, n_bands = X_all.shape
+# if wavelengths.shape[0] != n_bands:
+#     print("Warning: wavelength count does NOT match number of bands!")
+#     print(f"n_bands = {n_bands}, wavelengths = {wavelengths.shape[0]}")
+
+# # assert wavelengths.shape[0] == n_bands, "Wavelength length must match n_bands"
+
+# # if wavelengths.shape[0] > n_bands:
+# #     wavelengths = wavelengths[:n_bands]
+
+
+
+# %% [markdown]
+# ## GROUP A — CLEAN PIXELS (0% seep AND 0% contamination)
+
+# %%
+mask_clean = (seep_flat == 0) & (cont_flat == 0)
+X_clean = X_all[mask_clean]
+print("Clean pixels:", X_clean.shape[0])
+
+
+# %% [markdown]
+# ## GROUP B — SEEP pixels (polluted only by seep)
+
+# %%
+mask_seep_only = (seep_flat > 0) & (cont_flat == 0)
+X_seep_only = X_all[mask_seep_only]
+seep_vals_only = seep_flat[mask_seep_only]
+print("Seep-only pixels:", X_seep_only.shape[0])
+
+
+# %%
+# # Prepare arrays
+# mean_seep_spectra = np.full((100, n_bands), np.nan, dtype="float32")
+# count_seep        = np.zeros(100, dtype="int32")
+
+# # Loop 1% to 100%
+# for p in range(1, 101):
+#     low  = (p - 1) / 100.0        # e.g. p=1 → 0.00
+#     high = p / 100.0 + 1e-6       # p=1 → 0.01 + epsilon
+
+#     mask_bin = (seep_vals_only > low) & (seep_vals_only <= high)
+#     idx = np.where(mask_bin)[0]
+#     count = idx.size
+#     count_seep[p - 1] = count
+
+#     if count > 0:
+#         spectra_bin = X_seep_only[idx, :]
+#         mean_seep_spectra[p - 1, :] = np.nanmean(spectra_bin, axis=0)
+
+# # Show results
+# for p in range(1, 101):
+#     print(f"{p}% seep-only pixels: {count_seep[p-1]}")
+
+# %% [markdown]
+# ## GROUP C — CONTAMINATION pixels (polluted only by contamination)
+
+# %%
+mask_cont_only = (cont_flat > 0) & (seep_flat == 0)
+X_cont_only = X_all[mask_cont_only]
+cont_vals_only = cont_flat[mask_cont_only]
+print("Contamination-only pixels:", X_cont_only.shape[0])
+
+
+# %%
+
+# # Prepare arrays: mean spectrum per % bin, and pixel counts
+# mean_cont_spectra = np.full((100, n_bands), np.nan, dtype="float32")
+# count_cont        = np.zeros(100, dtype="int32")
+
+# # Loop 1% to 100%
+# for p in range(1, 101):          # p = 1..100
+#     low  = (p - 1) / 100.0       # 0.00 for 1%, 0.01 for 2%, ...
+#     high = p / 100.0 + 1e-6      # include exact 1.00 etc.
+
+#     # pixels whose contamination fraction is in this bin
+#     mask_bin = (cont_vals_only > low) & (cont_vals_only <= high)
+#     idx = np.where(mask_bin)[0]
+#     count = idx.size
+#     count_cont[p - 1] = count
+
+#     if count > 0:
+#         spectra_bin = X_cont_only[idx, :]           # (count, n_bands)
+#         mean_spec   = np.nanmean(spectra_bin, axis=0)
+#         mean_cont_spectra[p - 1, :] = mean_spec
+
+# # Print counts for each percentage
+# for p in range(1, 101):
+#     print(f"{p}% contamination-only pixels: {count_cont[p-1]}")
+
+# %%
+# 10 bins for >0%, each 10% wide
+bin_edges = [(i/10, (i+1)/10) for i in range(10)]
+
+# Labels: 0%, 1–10%, 11–20%, ..., 91–100%
+bin_labels = ["0%"] + [f"{i*10+1}-{(i+1)*10}%" for i in range(10)]
+
+print(bin_edges)
+print(bin_labels)
+
+
+# %% [markdown]
+# ## Create a function to compute mean spectra per bin
+
+# %%
+def compute_binned_spectra(values, X, bin_edges, min_pix=10):
+    n_bins = len(bin_edges)
+    n_bands = X.shape[1]
+
+    mean_spectra = np.full((n_bins+1, n_bands), np.nan)
+    std_spectra  = np.full((n_bins+1, n_bands), np.nan)
+    counts       = np.zeros(n_bins+1, dtype=int)
+
+    # ---- BIN 0: exactly clean (0%) ----
+    mask0 = values == 0
+    counts[0] = mask0.sum()
+    if counts[0] >= min_pix:
+        mean_spectra[0] = np.nanmean(X[mask0], axis=0)
+        std_spectra[0]  = np.nanstd(X[mask0], axis=0)
+
+    # ---- BINS 1–10: 10% intervals ----
+    for i, (low, high) in enumerate(bin_edges, start=1):
+        mask = (values > low) & (values <= high + 1e-6)
+        counts[i] = mask.sum()
+        if counts[i] >= min_pix:
+            mean_spectra[i] = np.nanmean(X[mask], axis=0)
+            std_spectra[i]  = np.nanstd(X[mask], axis=0)
+
+    return mean_spectra, std_spectra, counts
+
+
+# %% [markdown]
+# ## Apply to seep-only, cont-only, clean
+
+# %%
+mean_seep, std_seep, count_seep = compute_binned_spectra(
+    seep_vals_only, X_seep_only, bin_edges
+)
+
+mean_cont, std_cont, count_cont = compute_binned_spectra(
+    cont_vals_only, X_cont_only, bin_edges
+)
+
+mean_clean, std_clean, count_clean = compute_binned_spectra(
+    np.zeros_like(X_clean[:, 0]),  # just zeros
+    X_clean,
+    bin_edges
+)
+
+
+# %%
+print("Seep counts:", count_seep)
+print("Cont counts:", count_cont)
+print("Clean count:", count_clean[0])
+
+
+# %%
+plt.figure(figsize=(14, 7))
+
+for b in range(mean_seep.shape[0]):  # 0 = clean, then bins
+    m = mean_seep[b]
+    if np.isnan(m).all():
+        continue
+    
+    label = f"{bin_labels[b]} (n={count_seep[b]})"
+    plt.plot(wavelengths, m, linewidth=2, label=label)
+
+
+
+plt.xlabel("Wavelength (nm)")
+plt.ylabel("Reflectance")
+plt.title("Mean ENMAP Spectrum per Seep Bin (incl. Clean 0%)")
+plt.grid(True)
+plt.legend(fontsize=8, ncol=2)
+plt.tight_layout()
+plt.show()
+
+
+# %%
+plt.figure(figsize=(14, 7))
+
+for b in range(mean_cont.shape[0]):
+    m = mean_cont[b]
+    if np.isnan(m).all():
+        continue
+    
+    label = f"{bin_labels[b]} (n={count_cont[b]})"
+    plt.plot(wavelengths, m, linewidth=2, label=label)
+
+
+
+plt.xlabel("Wavelength (nm)")
+plt.ylabel("Reflectance")
+plt.title("Mean ENMAP Spectrum per Contamination Bin (incl. Clean 0%)")
+plt.grid(True)
+plt.legend(fontsize=8, ncol=2)
+plt.tight_layout()
+plt.show()
+
+
+# %%
+fig, axes = plt.subplots(3, 4, figsize=(18, 10), sharex=True, sharey=True)
+axes = axes.ravel()
+
+for b in range(mean_seep.shape[0]):
+    ax = axes[b]
+    m = mean_seep[b]
+
+    if np.isnan(m).all():
+        ax.set_title(f"{bin_labels[b]}\n(no data)")
+        ax.axis("off")
+        continue
+
+    ax.plot(wavelengths, m, linewidth=2)
+    ax.set_title(f"{bin_labels[b]} (n={count_seep[b]})", fontsize=10)
+    ax.grid(True)
+
+    
+
+fig.text(0.5, 0.04, 'Wavelength (nm)', ha='center')
+fig.text(0.04, 0.5, 'Reflectance', va='center', rotation='vertical')
+plt.tight_layout(rect=[0.05, 0.05, 1, 0.95])
+plt.show()
+
+
+# %%
+fig, axes = plt.subplots(3, 4, figsize=(18, 10), sharex=True, sharey=True)
+axes = axes.ravel()
+
+for b in range(mean_seep.shape[0]):
+    ax = axes[b]
+    m = mean_seep[b]
+
+    if np.isnan(m).all():
+        ax.set_title(f"{bin_labels[b]}\n(no data)")
+        ax.axis("off")
+        continue
+
+    ax.plot(wavelengths, m, linewidth=2)
+    ax.set_title(f"{bin_labels[b]} (n={count_seep[b]})", fontsize=10)
+    ax.grid(True)
+
+
+fig.text(0.5, 0.04, 'Wavelength (nm)', ha='center')
+fig.text(0.04, 0.5, 'Reflectance', va='center', rotation='vertical')
+plt.tight_layout(rect=[0.05, 0.05, 1, 0.95])
+plt.show()
+
+
+# %%
+clean_spec = mean_seep[0]  # bin 0 is clean
+
+plt.figure(figsize=(14,6))
+for b in range(1, mean_seep.shape[0]):
+    if np.isnan(mean_seep[b]).all():
+        continue
+
+    diff = mean_seep[b] - clean_spec
+    plt.plot(wavelengths, diff, label=f"{bin_labels[b]}")
+
+
+
+plt.axhline(0, color='black', linewidth=1)
+plt.xlabel("Wavelength (nm)")
+plt.ylabel("Reflectance Difference (Bin - Clean)")
+plt.title("Difference Spectra: Seep Bins Relative to Clean Pixels")
+plt.grid(True)
+plt.legend(fontsize=8)
+plt.show()
+
+
+# %%
+corr = []
+for i in range(n_bands):
+    corr.append(np.corrcoef(X_seep_only[:,i], seep_vals_only)[0,1])
+
+plt.figure(figsize=(14,5))
+plt.plot(wavelengths, corr)
+
+
+plt.xlabel("Wavelength (nm)")
+plt.ylabel("Correlation with seep")
+plt.title("Band-wise Correlation: Seep vs Wavelength")
+plt.grid(True)
+plt.show()
+
+
+# %%
+mean_clean = np.nanmean(X_clean, axis=0)  # shape (n_bands,)
+
+
+# %%
+plt.figure(figsize=(14,7))
+
+# 0% baseline
+plt.plot(wavelengths, mean_clean, linewidth=3,
+         label=f"0% (clean, n={X_clean.shape[0]})", zorder=5)
+
+# Then your seep bins, 1–10, 11–20, ...
+for b in range(mean_seep.shape[0]):   # or range(1,10) if you kept 10% bins
+    m = mean_seep[b]
+    if np.isnan(m).all():
+        continue
+    label = f"{bin_labels[b]} (n={count_seep[b]})"
+    plt.plot(wavelengths, m, linewidth=2, label=label, alpha=0.8)
+
+plt.xlabel("Wavelength (nm)")
+plt.ylabel("Reflectance")
+plt.title("Mean ENMAP spectrum per seep bin (0% = clean)")
+plt.grid(True)
+plt.legend(fontsize=8, ncol=2)
+plt.tight_layout()
+plt.show()
+
+
+# %%
+def plot_zoom(mean_spectra, counts, title, w, wmin, wmax):
+    plt.figure(figsize=(10,5))
+    mask = (w >= wmin) & (w <= wmax)
+
+    # baseline
+    plt.plot(w[mask], mean_clean[mask], linewidth=3,
+             label=f"0% (clean, n={X_clean.shape[0]})")
+
+    for b in range(mean_spectra.shape[0]):
+        m = mean_spectra[b]
+        if np.isnan(m).all():
+            continue
+        label = f"{bin_labels[b]} (n={counts[b]})"
+        plt.plot(w[mask], m[mask], linewidth=2, alpha=0.8, label=label)
+
+    plt.xlabel("Wavelength (nm)")
+    plt.ylabel("Reflectance")
+    plt.title(title)
+    plt.grid(True)
+    plt.legend(fontsize=8, ncol=2)
+    plt.tight_layout()
+    plt.show()
+
+plot_zoom(mean_seep, count_seep,
+          "Seep-only: zoom around 1700 nm", wavelengths, 1600, 1850)
+
+plot_zoom(mean_seep, count_seep,
+          "Seep-only: zoom around 2300 nm", wavelengths, 2200, 2400)
+
+
+# %%
+plt.figure(figsize=(14, 7))
+
+for b in range(mean_cont.shape[0]):      # 0% bin + 10% bins
+    m = mean_cont[b]
+    if np.isnan(m).all():
+        continue
+
+    label = f"{bin_labels[b]} (n={count_cont[b]})"
+    plt.plot(wavelengths, m, linewidth=2, label=label)
+
+plt.xlabel("Wavelength (nm)")
+plt.ylabel("Reflectance")
+plt.title("Mean ENMAP Spectrum per Contamination Bin (incl. Clean 0%)")
+plt.grid(True)
+plt.legend(fontsize=8, ncol=2)
+plt.tight_layout()
+plt.show()
+
+
+# %%
+fig, axes = plt.subplots(3, 4, figsize=(18, 10), sharex=True, sharey=True)
+axes = axes.ravel()
+
+for b in range(mean_cont.shape[0]):      # one panel per bin
+    ax = axes[b]
+    m  = mean_cont[b]
+
+    if np.isnan(m).all():
+        ax.set_title(f"{bin_labels[b]}\n(no data)")
+        ax.axis("off")
+        continue
+
+    ax.plot(wavelengths, m, linewidth=2)
+    ax.set_title(f"{bin_labels[b]} (n={count_cont[b]})", fontsize=10)
+    ax.grid(True)
+
+# global axis labels
+fig.text(0.5, 0.04, "Wavelength (nm)", ha="center")
+fig.text(0.04, 0.5, "Reflectance", va="center", rotation="vertical")
+
+plt.tight_layout(rect=[0.05, 0.05, 1, 0.95])
+plt.show()
+
+
+# %%
+def band_depth(spectrum, w, center, left, right):
+    """Simple linear-continuum band depth."""
+    # indices nearest to requested wavelengths
+    i_c = np.argmin(np.abs(w - center))
+    i_l = np.argmin(np.abs(w - left))
+    i_r = np.argmin(np.abs(w - right))
+
+    Rc = spectrum[i_c]
+    Rl = spectrum[i_l]
+    Rr = spectrum[i_r]
+
+    # linear continuum at center
+    Rc_cont = Rl + (Rr - Rl) * (w[i_c] - w[i_l]) / (w[i_r] - w[i_l])
+    return 1 - Rc / Rc_cont
+
+seep_depth_1700 = []
+for b in range(mean_seep.shape[0]):
+    m = mean_seep[b]
+    if np.isnan(m).all():
+        seep_depth_1700.append(np.nan)
+    else:
+        seep_depth_1700.append(
+            band_depth(m, wavelengths, center=1730, left=1660, right=1800)
+        )
+seep_depth_1700 = np.array(seep_depth_1700)
+
+
+# %%
+percent_mid = np.array([5,15,25,35,45,55,65,75,85,95])  # for 1–10%, ...
+plt.figure()
+plt.plot(percent_mid, seep_depth_1700, marker='o')
+plt.xlabel("Seep fraction (%)")
+plt.ylabel("Band depth at ~1700 nm")
+plt.title("C–H absorption vs seep fraction")
+plt.grid(True)
+plt.show()
+
+
+# %%
+# # --- 1. drop bands that are completely NaN ---
+# band_means = np.nanmean(X_all, axis=0)
+# bad_bands  = np.isnan(band_means)          # True where a band is all NaN
+# good_bands = ~bad_bands
+
+# print("Bad bands (all NaN):", np.where(bad_bands)[0])
+
+# # X_all = X_all[:, good_bands]               # keep only good bands
+# # wavelengths = wavelengths[good_bands]      # keep matching wavelengths
+# # n_pixels, n_bands = X_all.shape
+# # print("After dropping bad bands:", X_all.shape)
+
+# # --- 2. drop pixels (rows) that still contain any NaN ---
+# row_ok = ~np.isnan(X_all).any(axis=1)      # True for rows with no NaNs
+# print("Pixels removed because of NaNs:", (~row_ok).sum())
+
+# X_all      = X_all[row_ok, :]
+# seep_flat  = seep_flat[row_ok]
+# cont_flat  = cont_flat[row_ok]
+
+# print("Final X_all shape (clean):", X_all.shape)
+# print("NaNs remaining:", np.isnan(X_all).sum())
+
+
+# %%
+n_bins = 10
+min_pixels_per_bin = 20  # same as before
+
+bin_edges = []
+bin_labels = []
+for i in range(n_bins):
+    low = i * 0.10        # 0.0, 0.1, ..., 0.9
+    high = (i + 1) * 0.10 # 0.1, 0.2, ..., 1.0
+    bin_edges.append((low, high))
+    # labels: 1–10, 11–20, ..., 91–100
+    label_low = int(low * 100) + 1
+    label_high = int(high * 100)
+    bin_labels.append(f"{label_low}-{label_high}%")
+
+
+# %%
+# ---------- SEEP ANALYSIS (10% bins) ----------
+
+# use only pixels with seep > 0 and at least one finite band
+mask_valid_seep = (seep_flat > 0) & np.any(np.isfinite(X_all), axis=1)
+
+X_seep   = X_all[mask_valid_seep]
+seep_vals = seep_flat[mask_valid_seep]
+
+print("Number of pixels with seep > 0:", X_seep.shape[0])
+
+mean_seep_spectra = np.full((n_bins, n_bands), np.nan, dtype="float32")
+std_seep_spectra  = np.full((n_bins, n_bands), np.nan, dtype="float32")
+count_seep        = np.zeros(n_bins, dtype="int32")
+
+for b in range(n_bins):
+    low, high = bin_edges[b]
+    # small epsilon so high=1.0 is included
+    mask_bin = (seep_vals > low) & (seep_vals <= high + 1e-6)
+    idx = np.where(mask_bin)[0]
+    count = idx.size
+    count_seep[b] = count
+
+    if count >= min_pixels_per_bin:
+        spectra_bin = X_seep[idx, :]     # (count, n_bands)
+        mean_seep_spectra[b, :] = np.nanmean(spectra_bin, axis=0)
+        std_seep_spectra[b, :]  = np.nanstd(spectra_bin, axis=0)
+
+print("\nPixel counts for seep per 10% bin:")
+for b in range(n_bins):
+    if count_seep[b] > 0:
+        print(f"{bin_labels[b]}: {count_seep[b]} pixels")
+
+
+# %%
+plt.figure(figsize=(12, 6))
+for b in range(n_bins):
+    if np.all(np.isnan(mean_seep_spectra[b, :])):
+        continue  # no data in this bin
+
+    label = f"{bin_labels[b]} (n={count_seep[b]})"
+    plt.plot(wavelengths, mean_seep_spectra[b, :], label=label)
+
+plt.xlabel("Wavelength (nm)")
+plt.ylabel("Reflectance / Intensity")
+plt.title("Mean ENMAP spectrum per seep percentage bin")
+plt.legend(loc="best", fontsize=8)
+plt.grid(True)
+plt.tight_layout()
+plt.show()
+
+
+# %%
+# ---------- CONTAMINATED ANALYSIS (10% bins) ----------
+
+mask_valid_cont = (cont_flat > 0) & np.any(np.isfinite(X_all), axis=1)
+
+X_cont   = X_all[mask_valid_cont]
+cont_vals = cont_flat[mask_valid_cont]
+
+print("\nNumber of pixels with contaminated > 0:", X_cont.shape[0])
+
+mean_cont_spectra = np.full((n_bins, n_bands), np.nan, dtype="float32")
+std_cont_spectra  = np.full((n_bins, n_bands), np.nan, dtype="float32")
+count_cont        = np.zeros(n_bins, dtype="int32")
+
+for b in range(n_bins):
+    low, high = bin_edges[b]
+    mask_bin = (cont_vals > low) & (cont_vals <= high + 1e-6)
+    idx = np.where(mask_bin)[0]
+    count = idx.size
+    count_cont[b] = count
+
+    if count >= min_pixels_per_bin:
+        spectra_bin = X_cont[idx, :]
+        mean_cont_spectra[b, :] = np.nanmean(spectra_bin, axis=0)
+        std_cont_spectra[b, :]  = np.nanstd(spectra_bin, axis=0)
+
+print("\nPixel counts for contaminated per 10% bin:")
+for b in range(n_bins):
+    if count_cont[b] > 0:
+        print(f"{bin_labels[b]}: {count_cont[b]} pixels")
+
+
+# %%
+plt.figure(figsize=(12, 6))
+for b in range(n_bins):
+    if np.all(np.isnan(mean_cont_spectra[b, :])):
+        continue
+
+    label = f"{bin_labels[b]} (n={count_cont[b]})"
+    plt.plot(wavelengths, mean_cont_spectra[b, :], label=label)
+
+plt.xlabel("Wavelength (nm)")
+plt.ylabel("Reflectance / Intensity")
+plt.title("Mean ENMAP spectrum per contamination percentage bin")
+plt.legend(loc="best", fontsize=8)
+plt.grid(True)
+plt.tight_layout()
+plt.show()
+
+
+# %% [markdown]
+# ## variability as shaded bands
+
+# %%
+bin_to_show = 0  # e.g. 0 = 1–10%, 1 = 11–20%, etc.
+
+m = mean_seep_spectra[bin_to_show, :]
+s = std_seep_spectra[bin_to_show, :]
+
+valid = ~np.isnan(m)
+plt.figure(figsize=(10, 5))
+plt.plot(wavelengths[valid], m[valid], label=f"Mean {bin_labels[bin_to_show]}")
+plt.fill_between(
+    wavelengths[valid],
+    (m - s)[valid],
+    (m + s)[valid],
+    alpha=0.3,
+    label="±1σ"
+)
+plt.xlabel("Wavelength (nm)")
+plt.ylabel("Reflectance / Intensity")
+plt.title(f"Seep spectra variability for {bin_labels[bin_to_show]}")
+plt.legend()
+plt.grid(True)
+plt.tight_layout()
+plt.show()
+
+
+# %%
+# example for seep, only valid pixels
+from scipy.stats import spearmanr
+
+corr = np.zeros(n_bands)
+for b in range(n_bands):
+    valid = np.isfinite(X_seep[:, b])
+    if valid.sum() > 50:
+        corr[b], _ = spearmanr(X_seep[valid, b], seep_vals[valid])
+    else:
+        corr[b] = np.nan
+
+plt.figure(figsize=(10,4))
+plt.plot(wavelengths, corr)
+plt.xlabel("Wavelength (nm)")
+plt.ylabel("Spearman correlation with seep")
+plt.title("Band–seep correlation")
+plt.grid(True)
+plt.tight_layout()
+plt.show()
+
+
+# %%
+for b in range(n_bins):
+    low, high = bin_edges[b]
+    mask_bin = (seep_vals > low) & (seep_vals <= high + 1e-6)
+    idx = np.where(mask_bin)[0]
+    count = idx.size
+    count_seep[b] = count
+
+    if count > 0:
+        spectra_bin = X_seep[idx, :]
+        mean_seep_spectra[b, :] = np.nanmean(spectra_bin, axis=0)
+        std_seep_spectra[b, :]  = np.nanstd(spectra_bin, axis=0)
+    # else: it stays NaN
+
+
+# %%
+plt.figure(figsize=(12, 6))
+
+for b in range(n_bins):
+    m = mean_seep_spectra[b, :]
+    if np.all(np.isnan(m)):
+        continue  # no data for this bin
+
+    label = f"{bin_labels[b]} (n={count_seep[b]})"
+    # Matplotlib automatically gives different colors for each line
+    plt.plot(wavelengths, m, label=label)
+
+plt.xlabel("Wavelength (nm)")
+plt.ylabel("Reflectance / Intensity")
+plt.title("Mean ENMAP spectrum per seep bin (10% bins)")
+plt.legend(fontsize=8, ncol=2)
+plt.grid(True)
+plt.tight_layout()
+plt.show()
+
+
+# %%
+fig, axes = plt.subplots(2, 5, figsize=(18, 7), sharex=True, sharey=True)
+axes = axes.ravel()  # flatten 2D -> 1D list of axes
+
+for b in range(n_bins):
+    ax = axes[b]
+    m = mean_seep_spectra[b, :]
+    if np.all(np.isnan(m)):
+        ax.set_title(f"{bin_labels[b]}\n(no data)")
+        ax.axis("off")
+        continue
+
+    ax.plot(wavelengths, m, linewidth=1.5)  # color auto-chosen
+    ax.set_title(f"{bin_labels[b]} (n={count_seep[b]})", fontsize=9)
+    ax.grid(True)
+
+# common x/y labels
+fig.text(0.5, 0.04, "Wavelength (nm)", ha="center")
+fig.text(0.04, 0.5, "Reflectance / Intensity", va="center", rotation="vertical")
+
+fig.suptitle("Seep: mean spectra per 10% bin", fontsize=14)
+plt.tight_layout(rect=[0.04, 0.04, 1, 0.95])
+plt.show()
+
+
+# %%
+# Example: suppose atmospheric gap is around 1340–1450 nm
+# (replace with your actual wavelengths!)
+atm_windows = [
+    (1340, 1450),
+    # add more if you have them: (shorter_nm, longer_nm)
+]
+
+
+# %%
+for (w_low, w_high) in atm_windows:
+    ax.axvspan(w_low, w_high, color="grey", alpha=0.2, edgecolor="black")
+    ax.text(
+        (w_low + w_high) / 2,
+        ax.get_ylim()[1] * 0.95,     # near the top
+        "Atmospheric window",
+        ha="center",
+        va="top",
+        fontsize=8,
+        rotation=0,
+    )
+
+
+# %%
+atm_windows = [(1340, 1450)]  # put real wavelength range here
+
+fig, axes = plt.subplots(2, 5, figsize=(18, 7), sharex=True, sharey=True)
+axes = axes.ravel()
+
+for b in range(n_bins):
+    ax = axes[b]
+    m = mean_seep_spectra[b, :]
+    if np.all(np.isnan(m)):
+        ax.set_title(f"{bin_labels[b]}\n(no data)")
+        ax.axis("off")
+        continue
+
+    ax.plot(wavelengths, m, linewidth=1.5)
+    ax.set_title(f"{bin_labels[b]} (n={count_seep[b]})", fontsize=9)
+    ax.grid(True)
+
+    # ---- atmospheric window shading ----
+    for (w_low, w_high) in atm_windows:
+        ax.axvspan(w_low, w_high, color="grey", alpha=0.2)
+        ax.text(
+            (w_low + w_high) / 2,
+            ax.get_ylim()[1] * 0.95,
+            "Atmospheric\nwindow",
+            ha="center",
+            va="top",
+            fontsize=7,
+        )
+
+fig.text(0.5, 0.04, "Wavelength (nm)", ha="center")
+fig.text(0.04, 0.5, "Reflectance / Intensity", va="center", rotation="vertical")
+fig.suptitle("Seep: mean spectra per 10% bin (with atmospheric window)", fontsize=14)
+plt.tight_layout(rect=[0.04, 0.04, 1, 0.95])
+plt.show()
+
+
+# %%
+def compute_binned_spectra(values, X, n_bands, min_pix=5):
+    n_bins = len(bin_edges)
+    mean_spectra = np.full((n_bins+1, n_bands), np.nan)
+    count_per_bin = np.zeros(n_bins+1, dtype=int)
+
+    # Bin 0 = 0% pixels
+    mask0 = values == 0
+    count_per_bin[0] = mask0.sum()
+    if count_per_bin[0] >= min_pix:
+        mean_spectra[0,:] = np.nanmean(X[mask0], axis=0)
+
+    # Remaining bins
+    for b,(low,high) in enumerate(bin_edges):
+        mask = (values > low) & (values <= high+1e-6)
+        count = mask.sum()
+        count_per_bin[b+1] = count
+        if count >= min_pix:
+            mean_spectra[b+1,:] = np.nanmean(X[mask], axis=0)
+
+    return mean_spectra, count_per_bin
+
+
+# %%
+n_pixels, n_bands = X_all.shape
+
+mean_seep, count_seep = compute_binned_spectra(seep_flat, X_all, n_bands)
+mean_cont, count_cont = compute_binned_spectra(cont_flat, X_all, n_bands)
+
+
+# %%
+plt.figure(figsize=(14,7))
+
+for b in range(mean_seep.shape[0]):
+    m = mean_seep[b]
+    if np.isnan(m).all(): 
+        continue
+
+    plt.plot(wavelengths, m, linewidth=2, label=f"{bin_labels[b]} (n={count_seep[b]})")
+
+# atmospheric shading
+for (low,high) in atm_windows:
+    plt.axvspan(low, high, color='grey', alpha=0.2, label="Atmospheric window")
+
+plt.xlabel("Wavelength (nm)")
+plt.ylabel("Reflectance / Intensity")
+plt.title("Mean ENMAP spectrum for seep pollution bins (incl. 0%)")
+plt.legend(fontsize=8, ncol=2)
+plt.grid(True)
+plt.tight_layout()
+plt.show()
+
+
+# %%
+plt.figure(figsize=(14,7))
+
+for b in range(mean_seep.shape[0]):
+    m = mean_seep[b]
+    if np.isnan(m).all(): 
+        continue
+
+    plt.plot(wavelengths, m, linewidth=2, label=f"{bin_labels[b]} (n={count_seep[b]})")
+
+# atmospheric shading
+for (low,high) in atm_windows:
+    plt.axvspan(low, high, color='grey', alpha=0.2, label="Atmospheric window")
+
+plt.xlabel("Wavelength (nm)")
+plt.ylabel("Reflectance / Intensity")
+plt.title("Mean ENMAP spectrum for seep pollution bins (incl. 0%)")
+plt.legend(fontsize=8, ncol=2)
+plt.grid(True)
+plt.tight_layout()
+plt.show()
+
+
+# %%
+
+
+

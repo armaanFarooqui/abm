@@ -1,0 +1,122 @@
+# %%
+## Import required libraries 
+import rasterio
+import numpy as np
+import matplotlib.pyplot as plt
+import pandas as pd
+
+
+
+# %%
+## Assigning file paths to the variables
+enmap_path = r"C:\Users\jahee\OneDrive - University of Twente\Msc_Research\Data_processing\CO_Magdalena\ENMAP_mosaic.tif"
+seep_path  = r"C:\Users\jahee\OneDrive - University of Twente\Msc_Research\Data_processing\Raster_referance_mask\correction\Seep_Percentage_7.tif"
+cont_path  = r"C:\Users\jahee\OneDrive - University of Twente\Msc_Research\Data_processing\Raster_referance_mask\correction\Contamination_Percentage_7.tif"
+
+
+# %% [markdown]
+# ## Read ENMAP data and Flattening Enmap pixel
+
+# %%
+with rasterio.open(enmap_path) as src:
+    enmap_raw   = src.read()          # (bands, H, W)
+    enmap_nodata = src.nodata
+    H, W = src.height, src.width
+    n_bands = enmap_raw.shape[0]
+
+print("ENMAP shape (bands, H, W):", enmap_raw.shape, "nodata:", enmap_nodata)
+
+# convert to float and set nodata to NaN
+enmap = enmap_raw.astype("float32")
+if enmap_nodata is not None:
+    enmap[enmap_raw == enmap_nodata] = np.nan
+
+
+# (bands, H, W) -> (H, W, bands) -> (N_pixels, n_bands)
+enmap_hwk = np.moveaxis(enmap, 0, -1)
+X_all = enmap_hwk.reshape(-1, enmap_hwk.shape[-1])
+
+print("X_all shape:", X_all.shape)
+print("NaNs in X_all before impute:", np.isnan(X_all).sum())
+
+
+
+
+# %%
+
+df = pd.DataFrame(X_all, columns=[f"band_{i+1}" for i in range(X_all.shape[1])])
+df
+
+# %%
+idx = np.random.randint(0, X_all.shape[0])
+spectrum = X_all[idx, :]
+
+plt.figure(figsize=(12, 5))
+plt.plot(spectrum)
+
+plt.xlabel("Spectral Band")
+plt.ylabel("Reflectance / Intensity")
+
+plt.xticks(np.arange(0, 224, 10))   # show ticks every 10 bands
+plt.xlim(0, 223)
+plt.grid(True)
+plt.show()
+
+# %% [markdown]
+# ## Identifying the Nan bands in the Enmap 
+
+# %%
+n_pixels = X_all.shape[0]
+nan_per_band  = np.isnan(X_all).sum(axis=0)
+nan_frac_band = nan_per_band / n_pixels
+
+print("NaN fraction per band (first 20):")
+print(nan_frac_band[:20])
+print("Bands with > 90% NaNs:", np.where(nan_frac_band > 0.9)[0])
+
+
+
+
+# %%
+
+df = pd.DataFrame(X_all, columns=[f"band_{i+1}" for i in range(X_all.shape[1])])
+df
+
+# %%
+nan_per_pixel  = np.isnan(X_all).sum(axis=1)
+nan_frac_pixel = nan_per_pixel / X_all.shape[1]
+
+good_pixels = nan_frac_pixel < 0.5    # or 0.3, etc.
+X_all = X_all[good_pixels, :]
+
+
+# %%
+band_means = np.nanmean(X_all, axis=0)
+bad_bands  = np.isnan(band_means)      
+
+X_all      = X_all[:, ~bad_bands]
+band_means = band_means[~bad_bands]
+
+nan_rows, nan_cols = np.where(np.isnan(X_all))
+X_all[nan_rows, nan_cols] = band_means[nan_cols]
+
+
+# %%
+# print("Raw min / max (including nodata):", enmap_raw.min(), enmap_raw.max())
+
+# valid_mask = enmap_raw != nodata
+# print("Valid min / max:", enmap_raw[valid_mask].min(), enmap_raw[valid_mask].max())
+
+
+# %%
+df = pd.DataFrame(X_all, columns=[f"band_{i+1}" for i in range(X_all.shape[1])])
+df
+
+# %%
+cols = df.loc[:, "band_130":"band_140"] 
+cols
+
+
+
+
+
